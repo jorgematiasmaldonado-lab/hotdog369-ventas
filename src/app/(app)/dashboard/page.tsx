@@ -2,7 +2,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { Banknote, Landmark, CreditCard, UserRound, Ban, Receipt, TrendingUp, Clock, RefreshCw } from "lucide-react";
+import { Banknote, Landmark, CreditCard, UserRound, Ban, Receipt, TrendingUp, Clock, RefreshCw, AlertTriangle } from "lucide-react";
 import { useMe } from "@/components/me";
 import { NoAccess } from "@/components/app-shell";
 import { Card, Empty, Loading, PageTitle, Stat, cx } from "@/components/ui";
@@ -26,6 +26,9 @@ export default function Dashboard() {
   const { can, mod } = useMe();
   const [range, setRange] = useState<Range>({ range: "hoy" });
   const { data, isValidating } = useSWR<D>(`/api/dashboard${qs(range)}`, fetcher, { refreshInterval: 5000, keepPreviousData: true });
+  const showStock = mod("stock") && can("stock.ver", "stock.gestionar");
+  const { data: stock } = useSWR<{ id: number; name: string; unit: string; quantity: number; min_quantity: number; low: boolean }[]>(showStock ? "/api/stock" : null, fetcher, { refreshInterval: 60000 });
+  const lowStock = (stock ?? []).filter((i) => i.low);
   if (!can("dashboard.ver")) return <NoAccess />;
   const c = data?.current;
   const multiDay = data && data.from !== data.to;
@@ -41,6 +44,14 @@ export default function Dashboard() {
       <RangePicker value={range} onChange={setRange} />
       {!data || !c ? <Loading /> : (
         <div className="space-y-4">
+          {lowStock.length > 0 && (
+            <Link href="/stock" className="flex flex-wrap items-center gap-2 rounded-2xl border border-bad/40 bg-bad/10 p-3 text-sm text-bad">
+              <AlertTriangle className="size-5 shrink-0" />
+              <b>Stock bajo:</b>
+              <span className="min-w-0 flex-1">{lowStock.slice(0, 6).map((i) => `${i.name} (${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(i.quantity)} ${i.unit})`).join(" · ")}{lowStock.length > 6 && ` y ${lowStock.length - 6} más`}</span>
+              <span className="font-semibold underline">Ver stock</span>
+            </Link>
+          )}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <div className="col-span-2 rounded-2xl bg-primary p-5 text-white shadow-sm">
               <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide opacity-90"><TrendingUp className="size-4" />Vendido {range.range === "hoy" ? "hoy" : `del ${fmtDate(data.from)} al ${fmtDate(data.to)}`}</div>

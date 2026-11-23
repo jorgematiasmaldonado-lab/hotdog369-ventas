@@ -4,10 +4,11 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  ShoppingCart, LayoutDashboard, Receipt, Users, Wallet, BarChart3, Settings, Clock, LogOut, MoreHorizontal, WifiOff, RefreshCw, Info, AlertTriangle,
+  ShoppingCart, LayoutDashboard, Receipt, Users, Wallet, BarChart3, Settings, Clock, LogOut, MoreHorizontal, WifiOff, RefreshCw, Info, AlertTriangle, Boxes, UserRoundCheck,
 } from "lucide-react";
 import { useMe } from "./me";
 import { ThemeToggle } from "./theme-toggle";
+import { AdminNotices } from "./notices";
 import { cx, Modal, Button } from "./ui";
 import { useOnline, useQueue, syncQueue, clearFailed } from "@/lib/client/offline";
 import { ars, fmtDateTime } from "@/lib/format";
@@ -19,11 +20,13 @@ const NAV: NavItem[] = [
   { href: "/dashboard", label: "Panel", icon: <LayoutDashboard className="size-5" />, perms: ["dashboard.ver"] },
   { href: "/turno", label: "Mi turno", icon: <Clock className="size-5" />, perms: ["turnos.operar"] },
   { href: "/ventas", label: "Ventas", icon: <Receipt className="size-5" />, perms: ["ventas.ver_todas"] },
+  { href: "/stock", label: "Stock", icon: <Boxes className="size-5" />, perms: ["stock.ver", "stock.gestionar"], module: "stock" },
   { href: "/fiados", label: "Fiados", icon: <Users className="size-5" />, perms: ["fiados.ver", "fiados.gestionar"], module: "fiados" },
   { href: "/gastos", label: "Gastos", icon: <Wallet className="size-5" />, perms: ["gastos.ver", "gastos.gestionar"], module: "gastos" },
   { href: "/reportes", label: "Reportes", icon: <BarChart3 className="size-5" />, perms: ["reportes.ver"] },
   { href: "/turnos", label: "Turnos", icon: <Clock className="size-5" />, perms: ["turnos.ver_todos"] },
-  { href: "/admin", label: "Administración", icon: <Settings className="size-5" />, perms: ["productos.gestionar", "usuarios.gestionar", "config.gestionar", "auditoria.ver"] },
+  { href: "/horas", label: "Horas", icon: <UserRoundCheck className="size-5" />, perms: ["horas.fichar", "horas.ver", "horas.gestionar"], module: "personal" },
+  { href: "/admin", label: "Administración", icon: <Settings className="size-5" />, perms: ["productos.gestionar", "usuarios.gestionar", "config.gestionar", "auditoria.ver", "respaldo.gestionar"] },
 ];
 
 function SyncBadge() {
@@ -144,7 +147,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Estado de sincronización (escritorio) */}
       <div className="fixed right-4 top-4 z-40 hidden lg:block no-print"><SyncBadge /></div>
 
-      <main className="mx-auto max-w-7xl px-3 pb-28 pt-4 sm:px-5 lg:pb-10 lg:pt-6">{children}</main>
+      <main className="mx-auto max-w-7xl px-3 pb-28 pt-4 sm:px-5 lg:pb-10 lg:pt-6"><AdminNotices />{children}</main>
 
       {/* Navegación inferior (celular) */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/95 backdrop-blur lg:hidden safe-bottom no-print">

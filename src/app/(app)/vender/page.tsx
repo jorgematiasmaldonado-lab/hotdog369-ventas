@@ -7,6 +7,7 @@ import { useMe } from "@/components/me";
 import { NoAccess } from "@/components/app-shell";
 import { Button, Card, Field, Input, Loading, Modal, MoneyInput, Select, cx, useToast } from "@/components/ui";
 import { VoidModal } from "@/components/void-modal";
+import { StockCount } from "@/components/stock-count";
 import { CustomerPicker, type PickedCustomer } from "@/components/customer-picker";
 import { api, fetcher } from "@/lib/client/fetcher";
 import { cacheGet, cacheSet, CATALOG_KEY, SHIFT_KEY, submitSale, uuid, useOnline } from "@/lib/client/offline";
@@ -15,6 +16,7 @@ import { ars, fmtTime } from "@/lib/format";
 
 type CartLine = { product: Product; qty: number };
 type ShiftInfo = { shift: { id: number; opened_at: string; shift_type_name: string | null; opening_cash: number }; totals: { sales_count: number; sales_total: number } } | null;
+type CurrentShift = { shift: ShiftInfo; stock_check?: { required: boolean; mode: string }; hours?: { enabled: boolean; clocked_in: boolean } };
 
 export default function VenderPage() {
   const { can, mod } = useMe();
@@ -26,8 +28,8 @@ export default function VenderPage() {
     onSuccess: (d) => cacheSet(CATALOG_KEY, d),
     revalidateOnFocus: true,
   });
-  const { data: cur, mutate: refreshShift, error: shiftErr } = useSWR<{ shift: ShiftInfo }>("/api/shifts/current", fetcher, {
-    fallbackData: typeof window !== "undefined" ? cacheGet<{ shift: ShiftInfo }>(SHIFT_KEY) : undefined,
+  const { data: cur, mutate: refreshShift, error: shiftErr } = useSWR<CurrentShift>("/api/shifts/current", fetcher, {
+    fallbackData: typeof window !== "undefined" ? cacheGet<CurrentShift>(SHIFT_KEY) : undefined,
     onSuccess: (d) => cacheSet(SHIFT_KEY, d),
     refreshInterval: 15000,
   });
@@ -40,6 +42,10 @@ export default function VenderPage() {
   const [checkout, setCheckout] = useState(false);
   const [success, setSuccess] = useState<{ number?: number; change: number | null; queued: boolean; total: number } | null>(null);
   const [voiding, setVoiding] = useState<SaleRow | null>(null);
+  const [skipCount, setSkipCount] = useState<number | null>(null);
+  useEffect(() => {
+    try { setSkipCount(Number(sessionStorage.getItem("hd369_skip_count")) || null); } catch {}
+  }, []);
 
   useEffect(() => {
     if (catalog && cat === "all" && catalog.categories.length) setCat(catalog.categories[0].id);
@@ -70,7 +76,11 @@ export default function VenderPage() {
   if (!catalog || (!cur && !shiftErr)) return <Loading />;
 
   const shift = cur?.shift ?? null;
-  if (!shift) return <OpenShift catalog={catalog} onOpened={() => refreshShift()} />;
+  if (!shift) return <OpenShift catalog={catalog} hours={cur?.hours} onOpened={() => refreshShift()} />;
+  const sc = cur?.stock_check;
+  if (sc?.required && online && skipCount !== shift.shift.id)
+    return <StockCount mode={sc.mode} onDone={() => refreshShift()}
+      onSkip={() => { setSkipCount(shift.shift.id); try { sessionStorage.setItem("hd369_skip_count", String(shift.shift.id)); } catch {} }} />;
 
   const done = (r: { number?: number; change: number | null; queued: boolean; total: number }) => {
     setCart([]);
@@ -264,15 +274,16 @@ export default function VenderPage() {
   );
 }
 
-function OpenShift({ catalog, onOpened }: { catalog: Catalog; onOpened: () => void }) {
+function OpenShift({ catalog, hours, onOpened }: { catalog: Catalog; hours?: { enabled: boolean; clocked_in: boolean }; onOpened: () => void }) {
   const [type, setType] = useState<number | "">(catalog.shiftTypes[0]?.id ?? "");
   const [cash, setCash] = useState("");
+  const [clock, setClock] = useState(true);
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const open = async () => {
     setLoading(true);
     try {
-      await api("/api/shifts", { body: { shift_type_id: type || null, opening_cash: Number(cash || 0) } });
+      await api("/api/shifts", { body: { shift_type_id: type || null, opening_cash: Number(cash || 0), clock_in: !!hours?.enabled && !hours.clocked_in && clock } });
       toast("Turno abierto. ¡Buenas ventas!");
       onOpened();
     } catch (e) {
@@ -298,6 +309,9 @@ function OpenShift({ catalog, onOpened }: { catalog: Catalog; onOpened: () => vo
             </div>
           </Field>
           <Field label="Efectivo inicial en caja"><MoneyInput value={cash} onChange={setCash} /></Field>
+          {hours?.enabled && (hours.clocked_in
+            ? <div className="rounded-xl bg-good/10 px-3 py-2.5 text-sm font-semibold text-good">✓ Ya fichaste tu entrada</div>
+            : <label className="flex items-center justify-between rounded-xl bg-surface-2 px-3 py-3 font-semibold">Fichar mi entrada ahora<input type="checkbox" className="size-5" checked={clock} onChange={(e) => setClock(e.target.checked)} /></label>)}
           <Button size="lg" className="w-full" loading={loading} onClick={open}>Abrir turno</Button>
         </div>
       </Card>

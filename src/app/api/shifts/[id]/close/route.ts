@@ -1,6 +1,7 @@
 import { sql } from "@/lib/db";
 import { route, body, num, str, id, ApiError } from "@/lib/api";
 import { requireUser, can } from "@/lib/auth";
+import { clockOut, personalEnabled } from "@/lib/hours";
 import { shiftSummary } from "@/lib/shifts";
 import { audit } from "@/lib/audit";
 
@@ -22,6 +23,7 @@ export const POST = route(async (req, { params }) => {
       counted_cash = ${counted}, difference = ${diff}, notes = ${notes} WHERE id = ${shiftId}`;
     await audit(tx, user.id, "cerrar", "turno", shiftId, undefined,
       { expected_cash: sum.expected_cash, counted_cash: counted, difference: diff }, notes);
+    if (b.clock_out === true && s.user_id === user.id && can(user, "horas.fichar") && (await personalEnabled(tx))) await clockOut(tx, user.id);
     return { expected_cash: sum.expected_cash, counted_cash: counted, difference: diff };
   });
 });

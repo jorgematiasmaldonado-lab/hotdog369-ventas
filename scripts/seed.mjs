@@ -21,6 +21,7 @@ const ALL = [
   "turnos.operar", "turnos.ver_todos", "fiados.gestionar", "fiados.ver",
   "caja.gestionar", "gastos.gestionar", "gastos.ver", "dashboard.ver", "reportes.ver",
   "productos.gestionar", "usuarios.gestionar", "config.gestionar", "auditoria.ver",
+  "stock.ver", "stock.gestionar", "stock.contar", "horas.fichar", "horas.ver", "horas.gestionar", "respaldo.gestionar",
 ];
 
 await sql.begin(async (tx) => {
@@ -29,9 +30,9 @@ await sql.begin(async (tx) => {
   const roles = [
     { key: "admin", name: "Administrador", description: "Acceso total: edita, configura, reportes, gastos y caja.", permissions: ALL },
     { key: "empleado", name: "Empleado", description: "Registra ventas, fiados y puede anular sus ventas indicando el motivo.",
-      permissions: ["ventas.crear", "ventas.anular", "turnos.operar", "fiados.gestionar", "fiados.ver"] },
+      permissions: ["ventas.crear", "ventas.anular", "turnos.operar", "fiados.gestionar", "fiados.ver", "stock.contar", "horas.fichar"] },
     { key: "dueno", name: "Dueño (solo lectura)", description: "Ve ventas, reportes y movimientos. No puede cargar ni modificar nada.",
-      permissions: ["ventas.ver_todas", "turnos.ver_todos", "fiados.ver", "gastos.ver", "dashboard.ver", "reportes.ver", "auditoria.ver"] },
+      permissions: ["ventas.ver_todas", "turnos.ver_todos", "fiados.ver", "gastos.ver", "dashboard.ver", "reportes.ver", "auditoria.ver", "stock.ver", "horas.ver"] },
   ];
   const roleIds = {};
   for (const r of roles) {
@@ -96,12 +97,13 @@ await sql.begin(async (tx) => {
   await tx`INSERT INTO expense_categories (name, sort) VALUES
     ('Mercadería', 1), ('Bebidas', 2), ('Descartables', 3), ('Servicios', 4), ('Sueldos', 5), ('Otros', 6)`;
 
+  await tx`DELETE FROM modules WHERE key = 'stock'`;
   await tx`INSERT INTO modules (key, name, description, enabled, available, sort) VALUES
     ('fiados', 'Fiados / cuentas corrientes', 'Ventas a cuenta de clientes y cobro de deudas.', true, true, 1),
     ('gastos', 'Gastos y compras', 'Registro de compras de mercadería y otros gastos.', true, true, 2),
     ('caja', 'Movimientos de caja', 'Ingresos y retiros manuales de efectivo.', true, true, 3),
     ('sin_conexion', 'Modo sin conexión', 'Guarda las ventas si se corta internet y las sincroniza después.', true, true, 4),
-    ('stock', 'Control de stock', 'Descuenta insumos por venta y avisa cuando hay poco.', false, false, 10),
+    ('stock', 'Control de stock', 'Artículos de stock, ingresos de mercadería y descuento automático al vender.', true, true, 10),
     ('promos_horario', 'Promos por día y horario', 'Descuentos automáticos (ej. happy hour).', false, false, 11),
     ('delivery', 'Pedidos para llevar / delivery', 'Tomar pedidos con datos de entrega.', false, false, 12),
     ('sucursales', 'Varias sucursales', 'Administrar más de un local.', false, false, 13),

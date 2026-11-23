@@ -7,6 +7,8 @@ const ALLOWED: Record<string, (v: unknown) => boolean> = {
   business_name: (v) => typeof v === "string" && v.trim().length > 0 && v.length <= 80,
   fiado_alert_days: (v) => Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 365,
   ticket_footer: (v) => typeof v === "string" && v.length <= 200,
+  stock_control_on_open: (v) => v === "obligatorio" || v === "opcional" || v === "no",
+  backup_reminder_days: (v) => Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 30,
 };
 
 export const PUT = route(async (req) => {

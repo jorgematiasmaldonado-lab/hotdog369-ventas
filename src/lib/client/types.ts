@@ -4,6 +4,7 @@ export type Me = {
   user: { id: number; name: string; username: string; branch_id: number; role: { id: number; key: string; name: string }; permissions: Permission[] };
   modules: Record<string, boolean>;
   settings: Record<string, unknown>;
+  schema_ok?: boolean;
 };
 
 export type Category = { id: number; name: string; color: string; sort: number };

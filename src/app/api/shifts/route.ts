@@ -1,6 +1,7 @@
 import { sql } from "@/lib/db";
 import { route, body, num, ApiError } from "@/lib/api";
 import { requireUser, can } from "@/lib/auth";
+import { clockIn, personalEnabled } from "@/lib/hours";
 import { audit } from "@/lib/audit";
 import { resolveRange } from "@/lib/dates";
 import { TZ } from "@/lib/db";
@@ -34,6 +35,7 @@ export const POST = route(async (req) => {
     const [s] = await tx`INSERT INTO shifts (branch_id, user_id, shift_type_id, opening_cash)
       VALUES (${user.branch_id}, ${user.id}, ${typeId}, ${opening}) RETURNING *`;
     await audit(tx, user.id, "abrir", "turno", s.id, undefined, { opening_cash: opening, shift_type_id: typeId });
+    if (b.clock_in === true && can(user, "horas.fichar") && (await personalEnabled(tx))) await clockIn(tx, user.id, { shiftId: s.id, source: "turno" });
     return s;
   });
 });

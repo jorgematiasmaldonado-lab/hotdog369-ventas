@@ -2,6 +2,7 @@ import { sql, type Tx } from "./db";
 import { ApiError } from "./api";
 import { audit } from "./audit";
 import type { SessionUser } from "./auth";
+import { applySaleStock, revertSaleStock } from "./stock";
 
 export type SaleInput = {
   id: string;
@@ -141,6 +142,7 @@ export async function createSale(user: SessionUser, input: SaleInput) {
       await tx`INSERT INTO customer_movements (customer_id, sale_id, shift_id, type, amount, user_id, notes, created_at)
         VALUES (${customerId}, ${sale.id}, ${shiftId}, 'cargo', ${fiado}, ${user.id}, ${"Venta #" + sale.number}, ${createdAt})`;
     }
+    await applySaleStock(tx, sale.id, lines, -1, "venta", user.id);
     if (adjustNote) await audit(tx, user.id, "ajuste_precio", "venta", sale.id, { pagado: paid }, { total }, adjustNote);
     return { id: sale.id, number: sale.number, total, change };
   });
@@ -167,6 +169,7 @@ export async function voidSale(user: SessionUser, saleId: string, reason: string
       await tx`INSERT INTO customer_movements (customer_id, sale_id, shift_id, type, amount, user_id, notes)
         VALUES (${s.customer_id}, ${saleId}, ${s.shift_id}, 'anulacion', ${cargo.amount - rev.amount}, ${user.id}, ${"Anulación venta #" + s.number})`;
     }
+    await revertSaleStock(tx, saleId, "anulacion", user.id);
     await audit(tx, user.id, "anular", "venta", saleId, { status: "confirmada", total: s.total }, { status: "anulada" }, reason);
     return { ok: true };
   });
@@ -201,6 +204,7 @@ export async function editSale(user: SessionUser, saleId: string, input: Pick<Sa
     const customerId = input.customer_id ? Number(input.customer_id) : fiado > 0 ? before.customer_id : null;
     if (fiado > 0 && !customerId) throw new ApiError(400, "Para fiar hay que indicar el cliente.");
 
+    await revertSaleStock(tx, saleId, "edicion", user.id);
     await tx`DELETE FROM sale_items WHERE sale_id = ${saleId}`;
     await tx`DELETE FROM sale_payments WHERE sale_id = ${saleId}`;
     for (const l of lines)
@@ -208,6 +212,7 @@ export async function editSale(user: SessionUser, saleId: string, input: Pick<Sa
         VALUES (${saleId}, ${l.product_id}, ${l.product_name}, ${l.category_name}, ${l.unit_price}, ${l.qty}, ${l.subtotal})`;
     for (const p of pays)
       await tx`INSERT INTO sale_payments (sale_id, payment_method_id, amount) VALUES (${saleId}, ${p.payment_method_id}, ${p.amount})`;
+    await applySaleStock(tx, saleId, lines, -1, "edicion", user.id);
     const cashPart = pays.filter((p) => p.kind === "efectivo").reduce((a, p) => a + p.amount, 0);
     const cashReceived = before.cash_received != null && before.cash_received >= cashPart && cashPart > 0 ? before.cash_received : null;
     await tx`UPDATE sales SET total = ${total}, customer_id = ${customerId}, edited_at = now(), edited_by = ${user.id},

@@ -17,6 +17,10 @@ Desarrollado por **JMM Gestiones & Tecnología**.
 | **Reportes** | Resumen diario por medio de pago, mapa de calor día × hora, mejores días y horarios, productos, empleados, arqueos, anulaciones, gastos vs. ingresos, fiados. Exportación a Excel (CSV) e impresión/PDF. |
 | **Fiados** | Cuenta corriente por cliente, cobros parciales, alerta de deudas viejas, recordatorio por WhatsApp. |
 | **Gastos** | Compras de mercadería y otros gastos, con categoría, proveedor y foto del comprobante. |
+| **Stock** | Artículos (bebidas, pan, salchichas…), recetas por producto, ingresos de mercadería (opcionalmente como gasto), ajustes con motivo, alertas de stock bajo. Cada venta descuenta y cada anulación repone. |
+| **Control de stock** | Al abrir el turno el empleado cuenta "a ciegas"; se registran las diferencias y el stock queda corregido. Obligatorio, opcional o desactivado desde Configuración. |
+| **Horas del personal** | Fichar entrada y salida (también al abrir/cerrar el turno), francos, vacaciones, enfermedad, faltas y licencias, planilla por día, resumen por empleado y exportación CSV. |
+| **Respaldo** | Descarga de un respaldo completo (.json.gz), restauración con confirmación y aviso a los administradores cada 3 días. |
 | **Administración** | Productos, precios (con historial), categorías, medios de pago, turnos, motivos de anulación, categorías de gasto, usuarios, roles y permisos, módulos activables, configuración y auditoría. |
 | **Tema** | Modo claro y oscuro (recuerda la elección en cada equipo). |
 
@@ -73,6 +77,16 @@ No lo ejecutes en la base real del negocio.
 
 La app solo usa la base de datos (no usa Supabase Auth ni Storage). Todas las tablas tienen Row Level Security
 activado sin políticas, así la Data API pública de Supabase no puede leerlas; la app se conecta como dueña.
+
+### Actualizar una base existente
+Cuando una versión nueva necesita cambios en la base, se agrega un archivo `db/supabase/0X_actualizacion_*.sql`:
+se ejecuta una vez en el SQL Editor. Si falta, los administradores ven un aviso en la app y las funciones nuevas
+quedan ocultas (lo demás sigue funcionando).
+- `04_actualizacion_stock_horas.sql`: stock, control de stock, horas del personal y respaldos.
+
+### Respaldo y restauración
+*Administración → Respaldo* descarga todos los datos en un archivo `.json.gz`. Para restaurar desde la app el
+archivo debe pesar menos de 4 MB (aprox. un año de ventas); para uno más grande, pedir asistencia técnica.
 
 ### Borrar los datos de prueba
 Antes de empezar a usarla en serio: `db/supabase/03_borrar_datos_de_prueba.sql` en el SQL Editor.

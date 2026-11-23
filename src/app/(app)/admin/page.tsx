@@ -1,16 +1,17 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { Plus, Pencil, Trash2, Lock, ShieldCheck } from "lucide-react";
 import { useMe } from "@/components/me";
 import { NoAccess } from "@/components/app-shell";
 import { Badge, Button, Card, Empty, Field, Input, Loading, Modal, PageTitle, Select, Tabs, Textarea, cx, useToast } from "@/components/ui";
 import { CatalogManager } from "./catalog-manager";
+import { Respaldo } from "./respaldo";
 import { api, fetcher } from "@/lib/client/fetcher";
 import { PERMISSIONS, WRITE_PERMISSIONS, type Permission } from "@/lib/permissions";
 import { fmtDateTime } from "@/lib/format";
 
-type Tab = "productos" | "catalogos" | "usuarios" | "roles" | "modulos" | "config" | "auditoria";
+type Tab = "productos" | "catalogos" | "usuarios" | "roles" | "modulos" | "config" | "respaldo" | "auditoria";
 
 export default function AdminPage() {
   const { can } = useMe();
@@ -21,9 +22,15 @@ export default function AdminPage() {
     ["roles", "Roles y permisos", can("usuarios.gestionar")],
     ["modulos", "Módulos", can("config.gestionar")],
     ["config", "Configuración", can("config.gestionar")],
+    ["respaldo", "Respaldo", can("respaldo.gestionar")],
     ["auditoria", "Auditoría", can("auditoria.ver")],
   ] as [Tab, string, boolean][]).filter((t) => t[2]);
   const [tab, setTab] = useState<Tab>(tabs[0]?.[0] ?? "auditoria");
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab") as Tab | null;
+    if (t && tabs.some(([v]) => v === t)) setTab(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   if (!tabs.length) return <NoAccess />;
   return (
     <div>
@@ -47,6 +54,7 @@ export default function AdminPage() {
       {tab === "roles" && <Roles />}
       {tab === "modulos" && <Modules />}
       {tab === "config" && <Config />}
+      {tab === "respaldo" && <Respaldo />}
       {tab === "auditoria" && <Audit />}
     </div>
   );
@@ -198,7 +206,8 @@ function Modules() {
 
 function Config() {
   const { me, reload } = useMe();
-  const [f, setF] = useState({ business_name: String(me?.settings.business_name ?? "HOT DOG 369"), fiado_alert_days: Number(me?.settings.fiado_alert_days ?? 15), ticket_footer: String(me?.settings.ticket_footer ?? "") });
+  const [f, setF] = useState({ business_name: String(me?.settings.business_name ?? "HOT DOG 369"), fiado_alert_days: Number(me?.settings.fiado_alert_days ?? 15), ticket_footer: String(me?.settings.ticket_footer ?? ""),
+    stock_control_on_open: String(me?.settings.stock_control_on_open ?? "obligatorio"), backup_reminder_days: Number(me?.settings.backup_reminder_days ?? 3) });
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   return (
@@ -207,6 +216,12 @@ function Config() {
         <Field label="Nombre del negocio"><Input value={f.business_name} onChange={(e) => setF({ ...f, business_name: e.target.value })} /></Field>
         <Field label="Avisar fiados con más de… (días)"><Input type="number" min={1} value={f.fiado_alert_days} onChange={(e) => setF({ ...f, fiado_alert_days: Number(e.target.value) })} /></Field>
         <Field label="Mensaje al pie del ticket"><Input value={f.ticket_footer} onChange={(e) => setF({ ...f, ticket_footer: e.target.value })} /></Field>
+        <Field label="Control de stock al abrir el turno" hint="Obligatorio: el empleado no puede vender sin contar. Opcional: puede saltearlo.">
+          <Select value={f.stock_control_on_open} onChange={(e) => setF({ ...f, stock_control_on_open: e.target.value })}>
+            <option value="obligatorio">Obligatorio</option><option value="opcional">Opcional</option><option value="no">No pedir control</option>
+          </Select>
+        </Field>
+        <Field label="Recordar el respaldo cada… (días)"><Input type="number" min={1} max={30} value={f.backup_reminder_days} onChange={(e) => setF({ ...f, backup_reminder_days: Number(e.target.value) })} /></Field>
         <Button loading={loading} onClick={async () => {
           setLoading(true);
           try { await api("/api/admin/settings", { method: "PUT", body: f }); reload(); toast("Configuración guardada"); } catch (e) { toast((e as Error).message, "bad"); } finally { setLoading(false); }

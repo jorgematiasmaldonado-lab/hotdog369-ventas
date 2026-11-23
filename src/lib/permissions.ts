@@ -17,6 +17,13 @@ export const PERMISSIONS = {
   "usuarios.gestionar": "Administrar usuarios y roles",
   "config.gestionar": "Configurar el negocio y los módulos",
   "auditoria.ver": "Ver el registro de auditoría",
+  "stock.ver": "Ver el stock y sus movimientos",
+  "stock.gestionar": "Administrar artículos, ingresos y ajustes de stock",
+  "stock.contar": "Hacer el control de stock al abrir el turno",
+  "horas.fichar": "Fichar su entrada y salida",
+  "horas.ver": "Ver las horas de todo el personal",
+  "horas.gestionar": "Corregir fichadas y cargar francos, vacaciones y faltas",
+  "respaldo.gestionar": "Descargar y restaurar respaldos de la base",
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -26,4 +33,5 @@ export const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as Permission[];
 export const WRITE_PERMISSIONS: Permission[] = [
   "ventas.crear", "ventas.anular", "ventas.editar", "turnos.operar", "fiados.gestionar",
   "caja.gestionar", "gastos.gestionar", "productos.gestionar", "usuarios.gestionar", "config.gestionar",
+  "stock.gestionar", "stock.contar", "horas.fichar", "horas.gestionar", "respaldo.gestionar",
 ];

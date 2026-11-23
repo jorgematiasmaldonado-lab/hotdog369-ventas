@@ -15,7 +15,8 @@ export default function TurnoPage() {
   const { can, mod } = useMe();
   const router = useRouter();
   const toast = useToast();
-  const { data, mutate } = useSWR<{ shift: ShiftSummary | null }>("/api/shifts/current", fetcher, { refreshInterval: 15000 });
+  const { data, mutate } = useSWR<{ shift: ShiftSummary | null; hours?: { enabled: boolean; clocked_in: boolean } }>("/api/shifts/current", fetcher, { refreshInterval: 15000 });
+  const [clockOut, setClockOut] = useState(true);
   const [counted, setCounted] = useState("");
   const [notes, setNotes] = useState("");
   const [closing, setClosing] = useState(false);
@@ -39,7 +40,7 @@ export default function TurnoPage() {
   const close = async () => {
     setClosing(true);
     try {
-      await api(`/api/shifts/${s.shift.id}/close`, { body: { counted_cash: Number(counted), notes } });
+      await api(`/api/shifts/${s.shift.id}/close`, { body: { counted_cash: Number(counted), notes, clock_out: !!data.hours?.clocked_in && clockOut } });
       toast("Turno cerrado");
       router.push(`/turnos/${s.shift.id}`);
     } catch (e) {
@@ -70,6 +71,9 @@ export default function TurnoPage() {
               </div>
             )}
             <Field label="Observaciones (opcional)"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} /></Field>
+            {data.hours?.clocked_in && (
+              <label className="flex items-center justify-between rounded-xl bg-surface-2 px-3 py-3 font-semibold">Fichar mi salida al cerrar<input type="checkbox" className="size-5" checked={clockOut} onChange={(e) => setClockOut(e.target.checked)} /></label>
+            )}
             <Button size="lg" className="w-full" disabled={counted === ""} onClick={() => setConfirm(true)}>Cerrar turno</Button>
           </div>
         </Card>
