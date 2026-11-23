@@ -78,7 +78,7 @@ No lo ejecutes en la base real del negocio.
    carga los productos, medios de pago y usuarios iniciales. No hace falta ejecutar nada a mano.
 5. Abrir la URL desde el celular y elegir **"Agregar a pantalla de inicio"**; en la PC del local, *Instalar app* desde el navegador.
 
-Las funciones de la app corren en São Paulo (`vercel.json` → `gru1`), cerca de la base de datos.
+Las funciones de la app corren en la región de `vercel.json` (`iad1`, Washington), la misma zona que la base de Supabase (us-east-1). Si la base se crea en São Paulo, cambiar a `gru1`.
 
 ## Cómo extenderla
 
