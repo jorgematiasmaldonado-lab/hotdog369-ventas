@@ -1,7 +1,7 @@
 import { sql } from "./db";
 
 /** Última migración que esta versión de la app necesita en la base. */
-export const REQUIRED_MIGRATION = "003_stock_horas.sql";
+export const REQUIRED_MIGRATION = "004_push.sql";
 
 let cache: { ok: boolean; at: number } | null = null;
 

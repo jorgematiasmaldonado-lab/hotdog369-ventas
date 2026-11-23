@@ -1,3 +1,5 @@
+import { after } from "next/server";
+import { notifyLowStock } from "@/lib/push";
 import { route, body, str, ApiError } from "@/lib/api";
 import { requireUser, can } from "@/lib/auth";
 import { getSale, editSale, type SaleInput } from "@/lib/sales";
@@ -16,5 +18,7 @@ export const PUT = route(async (req, { params }) => {
   const { id } = await params;
   const b = await body<SaleInput & { reason: string }>(req);
   const reason = str(b.reason, "motivo de la edición", { max: 300 })!;
-  return editSale(user, id, b, reason);
+  const res = await editSale(user, id, b, reason);
+  if (res.low_stock?.length) after(() => notifyLowStock(res.low_stock));
+  return res;
 });

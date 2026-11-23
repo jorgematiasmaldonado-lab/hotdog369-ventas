@@ -1,3 +1,5 @@
+import { after } from "next/server";
+import { notifyLowStock } from "@/lib/push";
 import { sql, TZ } from "@/lib/db";
 import { route, body, ApiError } from "@/lib/api";
 import { requireUser, can } from "@/lib/auth";
@@ -9,7 +11,9 @@ export const POST = route(async (req) => {
   const input = await body<SaleInput>(req);
   if ((input.customer_id || input.new_customer) && !can(user, "fiados.gestionar"))
     throw new ApiError(403, "No tenés permiso para registrar fiados.");
-  return createSale(user, input);
+  const res = await createSale(user, input);
+  if ("low_stock" in res && res.low_stock?.length) after(() => notifyLowStock(res.low_stock));
+  return res;
 });
 
 // Listado de ventas. Empleados: solo su turno abierto. Admin/dueño: filtros por fecha, estado, usuario, medio de pago.

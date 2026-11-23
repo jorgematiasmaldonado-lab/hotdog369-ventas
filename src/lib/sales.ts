@@ -142,9 +142,9 @@ export async function createSale(user: SessionUser, input: SaleInput) {
       await tx`INSERT INTO customer_movements (customer_id, sale_id, shift_id, type, amount, user_id, notes, created_at)
         VALUES (${customerId}, ${sale.id}, ${shiftId}, 'cargo', ${fiado}, ${user.id}, ${"Venta #" + sale.number}, ${createdAt})`;
     }
-    await applySaleStock(tx, sale.id, lines, -1, "venta", user.id);
+    const low_stock = await applySaleStock(tx, sale.id, lines, -1, "venta", user.id);
     if (adjustNote) await audit(tx, user.id, "ajuste_precio", "venta", sale.id, { pagado: paid }, { total }, adjustNote);
-    return { id: sale.id, number: sale.number, total, change };
+    return { id: sale.id, number: sale.number, total, change, low_stock };
   });
 }
 
@@ -212,7 +212,7 @@ export async function editSale(user: SessionUser, saleId: string, input: Pick<Sa
         VALUES (${saleId}, ${l.product_id}, ${l.product_name}, ${l.category_name}, ${l.unit_price}, ${l.qty}, ${l.subtotal})`;
     for (const p of pays)
       await tx`INSERT INTO sale_payments (sale_id, payment_method_id, amount) VALUES (${saleId}, ${p.payment_method_id}, ${p.amount})`;
-    await applySaleStock(tx, saleId, lines, -1, "edicion", user.id);
+    const low_stock = await applySaleStock(tx, saleId, lines, -1, "edicion", user.id);
     const cashPart = pays.filter((p) => p.kind === "efectivo").reduce((a, p) => a + p.amount, 0);
     const cashReceived = before.cash_received != null && before.cash_received >= cashPart && cashPart > 0 ? before.cash_received : null;
     await tx`UPDATE sales SET total = ${total}, customer_id = ${customerId}, edited_at = now(), edited_by = ${user.id},
@@ -233,6 +233,6 @@ export async function editSale(user: SessionUser, saleId: string, input: Pick<Sa
     const after = await getSale(saleId, tx);
     const slim = (s: NonNullable<typeof before> | null) => ({ total: s!.total, items: s!.items, payments: s!.payments, customer_id: s!.customer_id });
     await audit(tx, user.id, "editar", "venta", saleId, slim(before), slim(after), reason);
-    return after;
+    return { ...after, low_stock };
   });
 }

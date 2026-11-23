@@ -1,4 +1,5 @@
 import { sql, type Tx } from "./db";
+import type { LowItem } from "./push";
 
 async function stockEnabled(tx: Tx) {
   try {
@@ -15,29 +16,36 @@ export async function moveStock(
   moves: { stock_item_id: number; delta: number }[],
   info: { type: string; user_id: number | null; sale_id?: string | null; count_id?: number | null; unit_cost?: number | null; supplier?: string | null; notes?: string | null },
 ) {
+  const low: LowItem[] = [];
   for (const m of moves) {
     if (!m.delta) continue;
-    const [it] = await tx`UPDATE stock_items SET quantity = quantity + ${m.delta} WHERE id = ${m.stock_item_id} RETURNING quantity`;
+    const [it] = await tx`UPDATE stock_items SET quantity = quantity + ${m.delta} WHERE id = ${m.stock_item_id}
+      RETURNING id, name, unit, quantity, min_quantity, active`;
     if (!it) continue;
+    // Avisar solo cuando CRUZA el mínimo (o llega a 0), no en cada venta posterior
+    const before = it.quantity - m.delta;
+    if (it.active && m.delta < 0 && ((before > it.min_quantity && it.quantity <= it.min_quantity) || (before > 0 && it.quantity <= 0)))
+      low.push({ id: it.id, name: it.name, unit: it.unit, quantity: it.quantity, min_quantity: it.min_quantity });
     await tx`INSERT INTO stock_movements (stock_item_id, type, qty, balance_after, sale_id, count_id, unit_cost, supplier, notes, user_id)
       VALUES (${m.stock_item_id}, ${info.type}, ${m.delta}, ${it.quantity}, ${info.sale_id ?? null}, ${info.count_id ?? null},
               ${info.unit_cost ?? null}, ${info.supplier ?? null}, ${info.notes ?? null}, ${info.user_id})`;
   }
+  return low;
 }
 
 /** Descuenta (o repone) el stock de los productos de una venta según sus recetas. */
 export async function applySaleStock(
   tx: Tx, saleId: string, lines: { product_id: number | null; qty: number }[], sign: 1 | -1, type: "venta" | "edicion", userId: number,
 ) {
-  if (!(await stockEnabled(tx))) return;
+  if (!(await stockEnabled(tx))) return [];
   const ids = [...new Set(lines.map((l) => l.product_id).filter((x): x is number => !!x))];
-  if (!ids.length) return;
+  if (!ids.length) return [];
   const comps = await tx`SELECT pc.product_id, pc.stock_item_id, pc.qty FROM product_components pc
     JOIN stock_items si ON si.id = pc.stock_item_id WHERE si.active AND pc.product_id IN ${tx(ids)}`;
   const acc = new Map<number, number>();
   for (const l of lines) for (const c of comps.filter((c) => c.product_id === l.product_id))
     acc.set(c.stock_item_id, (acc.get(c.stock_item_id) ?? 0) + sign * c.qty * l.qty);
-  await moveStock(tx, [...acc].map(([stock_item_id, delta]) => ({ stock_item_id, delta })), { type, user_id: userId, sale_id: saleId });
+  return moveStock(tx, [...acc].map(([stock_item_id, delta]) => ({ stock_item_id, delta })), { type, user_id: userId, sale_id: saleId });
 }
 
 /** Devuelve al stock todo lo que una venta descontó (al anular o antes de editarla). */

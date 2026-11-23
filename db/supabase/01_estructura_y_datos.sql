@@ -387,17 +387,40 @@ BEGIN
   END LOOP;
 END $$;
 
+-- ---------- Avisos en el celular ----------
+-- HOT DOG 369 · Notificaciones en el celular (Web Push) para avisos de stock bajo.
+-- Idempotente.
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id          serial PRIMARY KEY,
+  user_id     int NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint    text NOT NULL UNIQUE,
+  p256dh      text NOT NULL,
+  auth        text NOT NULL,
+  user_agent  text,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  last_ok_at  timestamptz
+);
+CREATE INDEX IF NOT EXISTS push_subscriptions_user_idx ON push_subscriptions(user_id);
+
+DO $$
+DECLARE t record;
+BEGIN
+  FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND NOT rowsecurity LOOP
+    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t.tablename);
+  END LOOP;
+END $$;
+
 -- ---------- Datos iniciales ----------
 
-INSERT INTO public.branches (id, name, active, created_at) VALUES (1, 'HOT DOG 369 - Local principal', true, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.branches (id, name, active, created_at) VALUES (1, 'HOT DOG 369 - Local principal', true, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
 
-INSERT INTO public.roles (id, key, name, description, permissions, is_system, created_at) VALUES (1, 'admin', 'Administrador', 'Acceso total: edita, configura, reportes, gastos y caja.', '{ventas.crear,ventas.anular,ventas.ver_todas,ventas.editar,turnos.operar,turnos.ver_todos,fiados.gestionar,fiados.ver,caja.gestionar,gastos.gestionar,gastos.ver,dashboard.ver,reportes.ver,productos.gestionar,usuarios.gestionar,config.gestionar,auditoria.ver,stock.ver,stock.gestionar,stock.contar,horas.fichar,horas.ver,horas.gestionar,respaldo.gestionar}', true, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.roles (id, key, name, description, permissions, is_system, created_at) VALUES (2, 'empleado', 'Empleado', 'Registra ventas, fiados y puede anular sus ventas indicando el motivo.', '{ventas.crear,ventas.anular,turnos.operar,fiados.gestionar,fiados.ver,stock.contar,horas.fichar}', true, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.roles (id, key, name, description, permissions, is_system, created_at) VALUES (3, 'dueno', 'Dueño (solo lectura)', 'Ve ventas, reportes y movimientos. No puede cargar ni modificar nada.', '{ventas.ver_todas,turnos.ver_todos,fiados.ver,gastos.ver,dashboard.ver,reportes.ver,auditoria.ver,stock.ver,horas.ver}', true, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.roles (id, key, name, description, permissions, is_system, created_at) VALUES (1, 'admin', 'Administrador', 'Acceso total: edita, configura, reportes, gastos y caja.', '{ventas.crear,ventas.anular,ventas.ver_todas,ventas.editar,turnos.operar,turnos.ver_todos,fiados.gestionar,fiados.ver,caja.gestionar,gastos.gestionar,gastos.ver,dashboard.ver,reportes.ver,productos.gestionar,usuarios.gestionar,config.gestionar,auditoria.ver,stock.ver,stock.gestionar,stock.contar,horas.fichar,horas.ver,horas.gestionar,respaldo.gestionar}', true, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.roles (id, key, name, description, permissions, is_system, created_at) VALUES (2, 'empleado', 'Empleado', 'Registra ventas, fiados y puede anular sus ventas indicando el motivo.', '{ventas.crear,ventas.anular,turnos.operar,fiados.gestionar,fiados.ver,stock.contar,horas.fichar}', true, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.roles (id, key, name, description, permissions, is_system, created_at) VALUES (3, 'dueno', 'Dueño (solo lectura)', 'Ve ventas, reportes y movimientos. No puede cargar ni modificar nada.', '{ventas.ver_todas,turnos.ver_todos,fiados.ver,gastos.ver,dashboard.ver,reportes.ver,auditoria.ver,stock.ver,horas.ver}', true, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
 
-INSERT INTO public.users (id, name, username, pin_hash, role_id, branch_id, active, failed_attempts, locked_until, session_version, created_at) VALUES (1, 'Administrador', 'admin', '$2b$10$WrFZhpWHJOhr/S3BOT3/PuOmqSp3KMAaUK0UP2oERG4DFAML1TFH.', 1, 1, true, 0, NULL, 1, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.users (id, name, username, pin_hash, role_id, branch_id, active, failed_attempts, locked_until, session_version, created_at) VALUES (2, 'Empleado de prueba', 'empleado', '$2b$10$Iy7wLg7hIMtyarBGbI6oIOd9QYp0EqU668/Nd2xhsP7o.YMD1MUPu', 2, 1, true, 0, NULL, 1, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.users (id, name, username, pin_hash, role_id, branch_id, active, failed_attempts, locked_until, session_version, created_at) VALUES (3, 'Dueño', 'dueno', '$2b$10$SDpy0U.IM1aeWW8uq4lPmeWMko/zBLi2UXIP52e0UCuzpj2DefjOO', 3, 1, true, 0, NULL, 1, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.users (id, name, username, pin_hash, role_id, branch_id, active, failed_attempts, locked_until, session_version, created_at) VALUES (1, 'Administrador', 'admin', '$2b$10$CV0vyJao.SJobTs8xDAPB.pEXONtOGNVI7aAGRjg0ky491A0jWPEO', 1, 1, true, 0, NULL, 1, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.users (id, name, username, pin_hash, role_id, branch_id, active, failed_attempts, locked_until, session_version, created_at) VALUES (2, 'Empleado de prueba', 'empleado', '$2b$10$gs1pWyTkKsKH2HfC5FaBre7qfWqSciBJdImNg/PS96MMK8tHx.bzu', 2, 1, true, 0, NULL, 1, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.users (id, name, username, pin_hash, role_id, branch_id, active, failed_attempts, locked_until, session_version, created_at) VALUES (3, 'Dueño', 'dueno', '$2b$10$SPpYKr14RtsaNHPESfkjrO42sBENHjZcnCqoRJHRPdpF8t2asx2DW', 3, 1, true, 0, NULL, 1, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
 
 INSERT INTO public.shift_types (id, name, sort, active) VALUES (1, 'Mañana', 1, true) ON CONFLICT DO NOTHING;
 INSERT INTO public.shift_types (id, name, sort, active) VALUES (2, 'Tarde', 2, true) ON CONFLICT DO NOTHING;
@@ -406,41 +429,41 @@ INSERT INTO public.shift_types (id, name, sort, active) VALUES (3, 'Noche', 3, t
 INSERT INTO public.categories (id, name, color, sort, active) VALUES (1, 'Panchería', '#D71B22', 1, true) ON CONFLICT DO NOTHING;
 INSERT INTO public.categories (id, name, color, sort, active) VALUES (2, 'Cafetería', '#8B5A2B', 2, true) ON CONFLICT DO NOTHING;
 
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (1, 1, 'Pancho clásico', 5000.00, '#D71B22', 1, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (2, 1, 'Promo pancho + Coca 237 ml', 6800.00, '#D71B22', 2, true, true, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (3, 1, 'Promo pancho + jugo chico', 6000.00, '#D71B22', 3, true, true, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (4, 1, 'Pancho vegano', 8000.00, '#151A1D', 4, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (5, 1, 'Pancho alemán', 8000.00, '#D71B22', 5, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (6, 1, 'Tostado', 8000.00, '#151A1D', 6, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (7, 1, 'Postres', 4500.00, '#D71B22', 7, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (8, 1, 'Bebida 350 cc', 2100.00, '#151A1D', 8, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (9, 1, 'Coca 500 cc', 2500.00, '#D71B22', 9, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (10, 1, 'Agua 500 cc', 2500.00, '#151A1D', 10, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (11, 1, 'Latas', 2300.00, '#D71B22', 11, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (12, 1, 'Agua saborizada', 2500.00, '#151A1D', 12, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (13, 1, 'Coca 237 ml', 1800.00, '#D71B22', 13, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (14, 2, 'Café solo', 2500.00, '#8B5A2B', 1, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (15, 2, 'Café + 2 criollos', 4000.00, '#151A1D', 2, true, true, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (16, 2, 'Café + medialuna', 3500.00, '#8B5A2B', 3, true, true, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (17, 2, 'Café + medialuna + criollo', 4000.00, '#151A1D', 4, true, true, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (18, 2, 'Medialuna sola', 1000.00, '#8B5A2B', 5, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (19, 2, 'Criollo solo', 800.00, '#151A1D', 6, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (20, 2, 'Dulce solo', 500.00, '#8B5A2B', 7, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (21, 2, 'Manteca sola', 500.00, '#151A1D', 8, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (22, 2, 'Queso crema', 500.00, '#8B5A2B', 9, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (23, 2, 'Mermelada', 400.00, '#151A1D', 10, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (24, 2, 'Rockstar', 2500.00, '#8B5A2B', 11, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (25, 2, 'Powerade', 3000.00, '#151A1D', 12, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (26, 2, 'Monster', 4000.00, '#8B5A2B', 13, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (27, 2, 'Papas Lays', 4500.00, '#151A1D', 14, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (28, 2, 'Doritos', 4500.00, '#8B5A2B', 15, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (29, 2, 'Tostitos chicos', 4500.00, '#151A1D', 16, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (30, 2, 'Tostito grande', 6000.00, '#8B5A2B', 17, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (31, 2, 'Tortuguita de ternera', 6000.00, '#151A1D', 18, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (32, 2, 'Tortuguita de jamón y queso', 5000.00, '#8B5A2B', 19, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (33, 2, 'Alfajores premium', 3000.00, '#151A1D', 20, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (34, 2, 'Ramen', 4000.00, '#8B5A2B', 21, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (35, 2, 'Pizzetas', 4500.00, '#151A1D', 22, true, false, '2026-11-23 22:33:12.154137+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (1, 1, 'Pancho clásico', 5000.00, '#D71B22', 1, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (2, 1, 'Promo pancho + Coca 237 ml', 6800.00, '#D71B22', 2, true, true, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (3, 1, 'Promo pancho + jugo chico', 6000.00, '#D71B22', 3, true, true, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (4, 1, 'Pancho vegano', 8000.00, '#151A1D', 4, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (5, 1, 'Pancho alemán', 8000.00, '#D71B22', 5, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (6, 1, 'Tostado', 8000.00, '#151A1D', 6, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (7, 1, 'Postres', 4500.00, '#D71B22', 7, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (8, 1, 'Bebida 350 cc', 2100.00, '#151A1D', 8, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (9, 1, 'Coca 500 cc', 2500.00, '#D71B22', 9, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (10, 1, 'Agua 500 cc', 2500.00, '#151A1D', 10, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (11, 1, 'Latas', 2300.00, '#D71B22', 11, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (12, 1, 'Agua saborizada', 2500.00, '#151A1D', 12, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (13, 1, 'Coca 237 ml', 1800.00, '#D71B22', 13, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (14, 2, 'Café solo', 2500.00, '#8B5A2B', 1, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (15, 2, 'Café + 2 criollos', 4000.00, '#151A1D', 2, true, true, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (16, 2, 'Café + medialuna', 3500.00, '#8B5A2B', 3, true, true, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (17, 2, 'Café + medialuna + criollo', 4000.00, '#151A1D', 4, true, true, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (18, 2, 'Medialuna sola', 1000.00, '#8B5A2B', 5, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (19, 2, 'Criollo solo', 800.00, '#151A1D', 6, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (20, 2, 'Dulce solo', 500.00, '#8B5A2B', 7, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (21, 2, 'Manteca sola', 500.00, '#151A1D', 8, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (22, 2, 'Queso crema', 500.00, '#8B5A2B', 9, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (23, 2, 'Mermelada', 400.00, '#151A1D', 10, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (24, 2, 'Rockstar', 2500.00, '#8B5A2B', 11, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (25, 2, 'Powerade', 3000.00, '#151A1D', 12, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (26, 2, 'Monster', 4000.00, '#8B5A2B', 13, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (27, 2, 'Papas Lays', 4500.00, '#151A1D', 14, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (28, 2, 'Doritos', 4500.00, '#8B5A2B', 15, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (29, 2, 'Tostitos chicos', 4500.00, '#151A1D', 16, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (30, 2, 'Tostito grande', 6000.00, '#8B5A2B', 17, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (31, 2, 'Tortuguita de ternera', 6000.00, '#151A1D', 18, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (32, 2, 'Tortuguita de jamón y queso', 5000.00, '#8B5A2B', 19, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (33, 2, 'Alfajores premium', 3000.00, '#151A1D', 20, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (34, 2, 'Ramen', 4000.00, '#8B5A2B', 21, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (35, 2, 'Pizzetas', 4500.00, '#151A1D', 22, true, false, '2026-11-23 22:57:48.293648+00') ON CONFLICT DO NOTHING;
 
 INSERT INTO public.payment_methods (id, name, kind, color, sort, active) VALUES (1, 'Efectivo', 'efectivo', '#16A34A', 1, true) ON CONFLICT DO NOTHING;
 INSERT INTO public.payment_methods (id, name, kind, color, sort, active) VALUES (2, 'Transferencia', 'transferencia', '#2563EB', 2, true) ON CONFLICT DO NOTHING;
@@ -467,9 +490,10 @@ INSERT INTO public.modules (key, name, description, enabled, available, config, 
 INSERT INTO public.modules (key, name, description, enabled, available, config, sort) VALUES ('sucursales', 'Varias sucursales', 'Administrar más de un local.', false, false, '{}', 13) ON CONFLICT DO NOTHING;
 INSERT INTO public.modules (key, name, description, enabled, available, config, sort) VALUES ('impresion', 'Ticketera / facturación', 'Imprimir tickets o emitir factura electrónica.', false, false, '{}', 14) ON CONFLICT DO NOTHING;
 
-INSERT INTO public.schema_migrations (name, applied_at) VALUES ('001_init.sql', '2026-11-23 22:33:12.011968+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.schema_migrations (name, applied_at) VALUES ('002_rls.sql', '2026-11-23 22:33:12.063897+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.schema_migrations (name, applied_at) VALUES ('003_stock_horas.sql', '2026-11-23 22:33:12.068158+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.schema_migrations (name, applied_at) VALUES ('001_init.sql', '2026-11-23 22:57:48.103433+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.schema_migrations (name, applied_at) VALUES ('002_rls.sql', '2026-11-23 22:57:48.178253+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.schema_migrations (name, applied_at) VALUES ('003_stock_horas.sql', '2026-11-23 22:57:48.184766+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.schema_migrations (name, applied_at) VALUES ('004_push.sql', '2026-11-23 22:57:48.215911+00') ON CONFLICT DO NOTHING;
 
 INSERT INTO public.settings (key, value) VALUES ('stock_control_on_open', '"obligatorio"') ON CONFLICT DO NOTHING;
 INSERT INTO public.settings (key, value) VALUES ('backup_reminder_days', '3') ON CONFLICT DO NOTHING;
@@ -503,6 +527,8 @@ SELECT pg_catalog.setval('public.payment_methods_id_seq', 6, true);
 SELECT pg_catalog.setval('public.product_price_history_id_seq', 1, false);
 
 SELECT pg_catalog.setval('public.products_id_seq', 35, true);
+
+SELECT pg_catalog.setval('public.push_subscriptions_id_seq', 1, false);
 
 SELECT pg_catalog.setval('public.roles_id_seq', 3, true);
 

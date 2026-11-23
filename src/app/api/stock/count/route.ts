@@ -1,3 +1,5 @@
+import { after } from "next/server";
+import { notifyLowStock, type LowItem } from "@/lib/push";
 import { sql } from "@/lib/db";
 import { route, body, str, ApiError } from "@/lib/api";
 import { requireUser, requireModule } from "@/lib/auth";
@@ -20,7 +22,8 @@ export const POST = route(async (req) => {
   const lines = Array.isArray(b.lines) ? (b.lines as { stock_item_id: number; counted: number }[]) : [];
   if (!lines.length) throw new ApiError(400, "No hay artículos contados.");
   const notes = str(b.notes, "observaciones", { required: false, max: 500 });
-  return sql.begin(async (tx) => {
+  const low: LowItem[] = [];
+  const res = await sql.begin(async (tx) => {
     const [shift] = await tx`SELECT id FROM shifts WHERE user_id = ${user.id} AND status = 'abierto'`;
     const [cnt] = await tx`INSERT INTO stock_counts (shift_id, user_id, notes) VALUES (${shift?.id ?? null}, ${user.id}, ${notes}) RETURNING id`;
     const result: { name: string; unit: string; expected: number; counted: number; difference: number }[] = [];
@@ -32,7 +35,7 @@ export const POST = route(async (req) => {
       const diff = Math.round((counted - it.quantity) * 1000) / 1000;
       await tx`INSERT INTO stock_count_lines (count_id, stock_item_id, expected, counted, difference)
         VALUES (${cnt.id}, ${it.id}, ${it.quantity}, ${counted}, ${diff})`;
-      if (diff !== 0) await moveStock(tx, [{ stock_item_id: it.id, delta: diff }], { type: "control", user_id: user.id, count_id: cnt.id, notes: "Control al abrir turno" });
+      if (diff !== 0) low.push(...await moveStock(tx, [{ stock_item_id: it.id, delta: diff }], { type: "control", user_id: user.id, count_id: cnt.id, notes: "Control al abrir turno" }));
       result.push({ name: it.name, unit: it.unit, expected: it.quantity, counted, difference: diff });
     }
     const differences = result.filter((r) => r.difference !== 0).length;
@@ -40,4 +43,6 @@ export const POST = route(async (req) => {
     await audit(tx, user.id, "control", "stock", cnt.id, undefined, { articulos: result.length, diferencias: differences }, notes);
     return { id: cnt.id, differences, lines: result };
   });
+  if (low.length) after(() => notifyLowStock(low));
+  return res;
 });

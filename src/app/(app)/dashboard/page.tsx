@@ -8,6 +8,7 @@ import { NoAccess } from "@/components/app-shell";
 import { Card, Empty, Loading, PageTitle, Stat, cx } from "@/components/ui";
 import { RangePicker, type Range } from "@/components/range-picker";
 import { SalesBars, BarList, Delta } from "@/components/charts";
+import { PushInvite } from "@/components/push-setup";
 import { fetcher, qs } from "@/lib/client/fetcher";
 import { ars, fmtDate, fmtTime, int } from "@/lib/format";
 
@@ -23,7 +24,7 @@ type D = {
 };
 
 export default function Dashboard() {
-  const { can, mod } = useMe();
+  const { can, mod, me } = useMe();
   const [range, setRange] = useState<Range>({ range: "hoy" });
   const { data, isValidating } = useSWR<D>(`/api/dashboard${qs(range)}`, fetcher, { refreshInterval: 5000, keepPreviousData: true });
   const showStock = mod("stock") && can("stock.ver", "stock.gestionar");
@@ -41,6 +42,7 @@ export default function Dashboard() {
           <span className="relative flex size-2"><span className="absolute inline-flex size-full animate-ping rounded-full bg-good opacity-75" /><span className="relative inline-flex size-2 rounded-full bg-good" /></span>
           En vivo · se actualiza solo {isValidating && <RefreshCw className="size-3 animate-spin" />}
         </span>} />
+      {showStock && me?.schema_ok && <PushInvite />}
       <RangePicker value={range} onChange={setRange} />
       {!data || !c ? <Loading /> : (
         <div className="space-y-4">

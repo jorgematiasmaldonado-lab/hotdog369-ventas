@@ -1,3 +1,5 @@
+import { after } from "next/server";
+import { notifyLowStock, type LowItem } from "@/lib/push";
 import { sql } from "@/lib/db";
 import { route, body, id, str, num, ApiError } from "@/lib/api";
 import { requireUser, requireModule } from "@/lib/auth";
@@ -18,7 +20,8 @@ export const POST = route(async (req, { params }) => {
   await requireModule("stock");
   const sid = id(await params);
   const b = await body(req);
-  return sql.begin(async (tx) => {
+  const low: LowItem[] = [];
+  const res = await sql.begin(async (tx) => {
     const [it] = await tx`SELECT * FROM stock_items WHERE id = ${sid} FOR UPDATE`;
     if (!it) throw new ApiError(404, "El artículo no existe.");
     if (b.type === "ingreso") {
@@ -31,10 +34,12 @@ export const POST = route(async (req, { params }) => {
     } else if (b.type === "ajuste") {
       const target = parseQty(b.new_quantity, "cantidad real", true);
       const notes = str(b.notes, "motivo del ajuste", { max: 300 })!;
-      await moveStock(tx, [{ stock_item_id: sid, delta: target - it.quantity }], { type: "ajuste", user_id: user.id, notes });
+      low.push(...await moveStock(tx, [{ stock_item_id: sid, delta: target - it.quantity }], { type: "ajuste", user_id: user.id, notes }));
     } else throw new ApiError(400, "Tipo de movimiento inválido.");
-    const [after] = await tx`SELECT quantity FROM stock_items WHERE id = ${sid}`;
-    await audit(tx, user.id, b.type as string, "stock", sid, { cantidad: it.quantity }, { cantidad: after.quantity }, (b.notes as string) ?? null);
-    return after;
+    const [now] = await tx`SELECT quantity FROM stock_items WHERE id = ${sid}`;
+    await audit(tx, user.id, b.type as string, "stock", sid, { cantidad: it.quantity }, { cantidad: now.quantity }, (b.notes as string) ?? null);
+    return now;
   });
+  if (low.length) after(() => notifyLowStock(low));
+  return res;
 });

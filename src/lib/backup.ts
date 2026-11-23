@@ -9,7 +9,7 @@ export const BACKUP_TABLES = [
   "payment_methods", "customers", "void_reasons", "shifts", "sales", "sale_items", "sale_payments", "customer_movements",
   "expense_categories", "expenses", "cash_movements", "modules", "settings",
   "stock_items", "product_components", "stock_counts", "stock_count_lines", "stock_movements",
-  "time_entries", "time_off", "audit_log",
+  "time_entries", "time_off", "push_subscriptions", "audit_log",
 ];
 
 type TableDump = { columns: string[]; rows: unknown[][] };

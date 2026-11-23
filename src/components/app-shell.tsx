@@ -9,6 +9,8 @@ import {
 import { useMe } from "./me";
 import { ThemeToggle } from "./theme-toggle";
 import { AdminNotices } from "./notices";
+import useSWR from "swr";
+import { fetcher } from "@/lib/client/fetcher";
 import { cx, Modal, Button } from "./ui";
 import { useOnline, useQueue, syncQueue, clearFailed } from "@/lib/client/offline";
 import { ars, fmtDateTime } from "@/lib/format";
@@ -70,8 +72,26 @@ function SyncBadge() {
   );
 }
 
+function useLowStock() {
+  const { me, can, mod } = useMe();
+  const on = !!me?.schema_ok && mod("stock") && can("stock.ver", "stock.gestionar");
+  const { data } = useSWR<{ count: number; items: { name: string }[] }>(on ? "/api/stock/low" : null, fetcher, { refreshInterval: 60000 });
+  return on ? data?.count ?? 0 : 0;
+}
+
+function LowStockPill({ count, className }: { count: number; className?: string }) {
+  if (!count) return null;
+  return (
+    <Link href="/stock" title={`${count} artículo${count === 1 ? "" : "s"} con stock bajo`}
+      className={cx("flex items-center gap-1 rounded-full bg-bad px-2.5 py-1.5 text-xs font-bold text-white", className)}>
+      <AlertTriangle className="size-3.5" />{count}<span className="hidden sm:inline">&nbsp;stock bajo</span>
+    </Link>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { me, can, mod } = useMe();
+  const lowStock = useLowStock();
   const path = usePathname();
   const router = useRouter();
   const [more, setMore] = useState(false);
@@ -106,7 +126,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Link key={n.href} href={n.href}
               className={cx("flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
                 isActive(n.href) ? "bg-brand-red text-white" : "text-white/75 hover:bg-white/10 hover:text-white")}>
-              {n.icon}{n.label}
+              {n.icon}<span className="flex-1">{n.label}</span>
+              {n.href === "/stock" && lowStock > 0 && <span className="rounded-full bg-brand-yellow px-2 text-xs font-extrabold text-brand-black">{lowStock}</span>}
             </Link>
           ))}
           <Link href="/acerca" className={cx("flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold", isActive("/acerca") ? "bg-brand-red" : "text-white/60 hover:bg-white/10")}>
@@ -138,6 +159,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span className="font-display text-lg tracking-wide">HOT DOG <span className="text-brand-yellow">369</span></span>
         </Link>
         <div className="flex items-center gap-1">
+          <LowStockPill count={lowStock} />
           <SyncBadge />
           <ThemeToggle />
           <button onClick={logout} className="rounded-xl p-2.5 text-white/80 hover:bg-white/10" aria-label="Salir"><LogOut className="size-5" /></button>

@@ -20,6 +20,7 @@ Desarrollado por **JMM Gestiones & Tecnología**.
 | **Stock** | Artículos (bebidas, pan, salchichas…), recetas por producto, ingresos de mercadería (opcionalmente como gasto), ajustes con motivo, alertas de stock bajo. Cada venta descuenta y cada anulación repone. |
 | **Control de stock** | Al abrir el turno el empleado cuenta "a ciegas"; se registran las diferencias y el stock queda corregido. Obligatorio, opcional o desactivado desde Configuración. |
 | **Horas del personal** | Fichar entrada y salida (también al abrir/cerrar el turno), francos, vacaciones, enfermedad, faltas y licencias, planilla por día, resumen por empleado y exportación CSV. |
+| **Avisos de stock bajo** | Aviso en el encabezado de todas las pantallas y notificación en el celular/PC (Web Push, sin servicios pagos) cuando un artículo cruza su mínimo. Se activa en cada equipo desde el Panel o Stock. En iPhone requiere la app agregada a la pantalla de inicio. |
 | **Respaldo** | Descarga de un respaldo completo (.json.gz), restauración con confirmación y aviso a los administradores cada 3 días. |
 | **Administración** | Productos, precios (con historial), categorías, medios de pago, turnos, motivos de anulación, categorías de gasto, usuarios, roles y permisos, módulos activables, configuración y auditoría. |
 | **Tema** | Modo claro y oscuro (recuerda la elección en cada equipo). |
@@ -83,6 +84,7 @@ Cuando una versión nueva necesita cambios en la base, se agrega un archivo `db/
 se ejecuta una vez en el SQL Editor. Si falta, los administradores ven un aviso en la app y las funciones nuevas
 quedan ocultas (lo demás sigue funcionando).
 - `04_actualizacion_stock_horas.sql`: stock, control de stock, horas del personal y respaldos.
+- `05_actualizacion_avisos.sql`: avisos de stock bajo en el celular.
 
 ### Respaldo y restauración
 *Administración → Respaldo* descarga todos los datos en un archivo `.json.gz`. Para restaurar desde la app el

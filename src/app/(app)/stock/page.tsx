@@ -6,6 +6,7 @@ import { useMe } from "@/components/me";
 import { NoAccess } from "@/components/app-shell";
 import { Badge, Button, Card, Empty, Field, Input, Loading, Modal, MoneyInput, PageTitle, Select, Stat, Tabs, Textarea, cx, useToast } from "@/components/ui";
 import { RangePicker, type Range } from "@/components/range-picker";
+import { PushButton } from "@/components/push-setup";
 import { api, fetcher, qs } from "@/lib/client/fetcher";
 import type { Catalog } from "@/lib/client/types";
 import { ars, fmtDateTime } from "@/lib/format";
@@ -32,9 +33,10 @@ export default function StockPage() {
   return (
     <div>
       <PageTitle title="Stock" subtitle="Se descuenta solo con cada venta, según lo que lleva cada producto"
-        actions={manage && <>
-          <Button variant="secondary" onClick={() => setEditing("new")}><Plus className="size-4" />Nuevo artículo</Button>
-          <Button onClick={() => setIngreso(true)}><PackagePlus className="size-4" />Ingreso de mercadería</Button>
+        actions={<>
+          <PushButton />
+          {manage && <Button variant="secondary" onClick={() => setEditing("new")}><Plus className="size-4" />Nuevo artículo</Button>}
+          {manage && <Button onClick={() => setIngreso(true)}><PackagePlus className="size-4" />Ingreso de mercadería</Button>}
         </>} />
       <Tabs className="mb-4" value={tab} onChange={setTab} items={[
         { value: "articulos", label: "Artículos" }, { value: "recetas", label: "Qué descuenta cada producto" },
