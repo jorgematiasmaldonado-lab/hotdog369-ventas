@@ -63,7 +63,12 @@ No lo ejecutes en la base real del negocio.
 
 ## Publicarla en internet (gratis para empezar)
 
-1. **Base de datos**: crear un proyecto en [Neon](https://neon.tech) (región São Paulo) y copiar la *connection string* (botón **Connect**).
+1. **Base de datos** — [Supabase](https://supabase.com) (recomendado) o [Neon](https://neon.tech), región **São Paulo**:
+   - Supabase: *New project* (contraseña solo con letras y números) → **Connect** → **Transaction pooler** (puerto 6543)
+     → copiar la URL y reemplazar `[YOUR-PASSWORD]`.
+   - Neon: botón **Connect** → copiar la *connection string*.
+   - La app solo usa la base de datos (no usa Supabase Auth ni Storage). Todas las tablas quedan con
+     Row Level Security activado sin políticas, así la Data API pública de Supabase no puede leerlas.
 2. **Hosting**: en [Vercel](https://vercel.com) → *Add New → Project* → importar este repositorio de GitHub.
 3. En *Environment Variables* cargar:
    - `DATABASE_URL` = la connection string de Neon
