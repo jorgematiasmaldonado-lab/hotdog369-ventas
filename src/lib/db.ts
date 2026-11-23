@@ -13,8 +13,11 @@ function create() {
   try { const u = new URL(url); u.searchParams.delete("channel_binding"); clean = u.toString(); } catch {}
   return postgres(clean, {
     prepare: false, // compatible con poolers (Supabase / Neon)
-    max: process.env.NODE_ENV === "production" ? 5 : 10,
+    // En servidores serverless (Vercel) con el pooler de Supabase conviene 1 conexión por
+    // instancia: las consultas en paralelo se encolan en ella y no se abren conexiones de más.
+    max: Number(process.env.DB_MAX_CONNECTIONS) || (process.env.NODE_ENV === "production" ? 1 : 10),
     idle_timeout: 20,
+    connect_timeout: 10,
     onnotice: () => {},
     types: {
       // numeric → number (los montos son pesos, sin riesgo de precisión)
