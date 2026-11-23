@@ -74,6 +74,11 @@ No lo ejecutes en la base real del negocio.
 La app solo usa la base de datos (no usa Supabase Auth ni Storage). Todas las tablas tienen Row Level Security
 activado sin políticas, así la Data API pública de Supabase no puede leerlas; la app se conecta como dueña.
 
+### Borrar los datos de prueba
+Antes de empezar a usarla en serio: `db/supabase/03_borrar_datos_de_prueba.sql` en el SQL Editor.
+Borra ventas, turnos, fiados, clientes, gastos, caja y auditoría (la numeración vuelve a 1) y conserva
+productos, precios, medios de pago, usuarios y configuración. No se puede deshacer.
+
 ### 2. La app en Vercel
 1. *Add New → Project* → importar este repositorio.
 2. *Environment Variables*:
