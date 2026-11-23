@@ -6,7 +6,10 @@ import { execSync } from "node:child_process";
 import postgres from "postgres";
 import { dbUrl } from "./db-url.mjs";
 
-const run = (cmd) => execSync(cmd, { stdio: "inherit" });
+const run = (cmd) => {
+  try { execSync(cmd, { stdio: "inherit" }); }
+  catch { console.error(`\nFalló: ${cmd} (ver el mensaje de arriba)`); process.exit(1); }
+};
 
 if (!process.env.DATABASE_URL) {
   console.error("Falta la variable DATABASE_URL en Vercel (Settings → Environment Variables).");

@@ -1,6 +1,8 @@
 // Carga los datos iniciales (solo si la base está vacía).
 import postgres from "postgres";
 import { dbUrl } from "./db-url.mjs";
+import { explainDbError } from "./db-error.mjs";
+process.on("unhandledRejection", (e) => { explainDbError(e); process.exit(1); });
 import bcrypt from "bcryptjs";
 import { loadEnv } from "./env.mjs";
 

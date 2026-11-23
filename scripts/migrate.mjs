@@ -1,10 +1,12 @@
 // Ejecuta las migraciones SQL de db/migrations en orden (una sola vez cada una).
 import postgres from "postgres";
 import { dbUrl } from "./db-url.mjs";
+import { explainDbError } from "./db-error.mjs";
 import { readdirSync, readFileSync } from "node:fs";
 import { loadEnv } from "./env.mjs";
 
 loadEnv();
+try {
 const sql = postgres(dbUrl(), { prepare: false, onnotice: () => {} });
 await sql`CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`;
 const done = new Set((await sql`SELECT name FROM schema_migrations`).map((r) => r.name));
@@ -25,3 +27,7 @@ await sql.unsafe(`DO $$ DECLARE t record; BEGIN
   END LOOP; END $$;`);
 console.log("Migraciones al día.");
 await sql.end();
+} catch (e) {
+  explainDbError(e);
+  process.exit(1);
+}
