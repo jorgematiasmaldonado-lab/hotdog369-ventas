@@ -71,7 +71,7 @@ No lo ejecutes en la base real del negocio.
      Row Level Security activado sin políticas, así la Data API pública de Supabase no puede leerlas.
 2. **Hosting**: en [Vercel](https://vercel.com) → *Add New → Project* → importar este repositorio de GitHub.
 3. En *Environment Variables* cargar:
-   - `DATABASE_URL` = la connection string de Neon
+   - `DATABASE_URL` = la URL de conexión del paso 1 (Supabase o Neon)
    - `SESSION_SECRET` = una clave larga y aleatoria (por ejemplo, la salida de `openssl rand -hex 32`)
    - `CARGAR_DEMO` = `si` *(opcional, solo para una versión de prueba: carga 30 días de ventas ficticias)*
 4. **Deploy**. En cada publicación, `scripts/vercel-build.mjs` crea o actualiza las tablas y, si la base está vacía,
