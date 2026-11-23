@@ -1,0 +1,10 @@
+node_modules
+.next
+.env
+.env.local
+*.tsbuildinfo
+next-env.d.ts
+# archivos pesados o personales que no van al repositorio
+hotdog369-app.zip
+docs/video/
+scripts/jmm-source.jpg
