@@ -53,7 +53,7 @@ export default function Dashboard() {
             <Stat label="Transferencia" value={ars(c.transferencia)} icon={<Landmark className="size-3.5" />} />
             <Stat label="Otros medios" value={ars(c.otros)} icon={<CreditCard className="size-3.5" />} />
             {mod("fiados") && <Stat label="Fiado del período" value={ars(c.fiado)} icon={<UserRound className="size-3.5" />} sub={`Total adeudado: ${ars(data.fiadoPending)}`} />}
-            <Stat label="Anulaciones" value={`${c.voided_count} · ${ars(c.voided_total)}`} icon={<Ban className="size-3.5" />} />
+            <Stat label="Anulaciones" value={ars(c.voided_total)} icon={<Ban className="size-3.5" />} sub={`${c.voided_count} venta${c.voided_count === 1 ? "" : "s"} anulada${c.voided_count === 1 ? "" : "s"}`} />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-3">

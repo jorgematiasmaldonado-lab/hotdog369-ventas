@@ -1,5 +1,6 @@
 const money = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 });
-export const ars = (n: number | null | undefined) => `$ ${money.format(Math.round(Number(n ?? 0)))}`;
+// espacio no separable: el "$" nunca queda en otra línea que el número
+export const ars = (n: number | null | undefined) => `$\u00A0${money.format(Math.round(Number(n ?? 0)))}`;
 export const int = (n: number | null | undefined) => money.format(Number(n ?? 0));
 
 const TZ = "America/Argentina/Buenos_Aires";
