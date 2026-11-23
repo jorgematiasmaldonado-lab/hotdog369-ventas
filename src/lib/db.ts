@@ -8,7 +8,10 @@ declare global {
 function create() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("Falta la variable DATABASE_URL");
-  return postgres(url, {
+  // Neon agrega "channel_binding", que PostgreSQL rechaza como parámetro de conexión
+  let clean = url;
+  try { const u = new URL(url); u.searchParams.delete("channel_binding"); clean = u.toString(); } catch {}
+  return postgres(clean, {
     prepare: false, // compatible con poolers (Supabase / Neon)
     max: process.env.NODE_ENV === "production" ? 5 : 10,
     idle_timeout: 20,

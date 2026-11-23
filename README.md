@@ -63,12 +63,17 @@ No lo ejecutes en la base real del negocio.
 
 ## Publicarla en internet (gratis para empezar)
 
-1. **Base de datos**: crear un proyecto en [Supabase](https://supabase.com) o [Neon](https://neon.tech) y copiar la cadena de conexión
-   (en Supabase: *Project Settings → Database → Connection string*, modo **Transaction pooler**, puerto 6543).
-2. Desde tu computadora, con esa cadena en `.env`, ejecutar `npm run db:migrate` y `npm run db:seed`.
-3. **Hosting**: subir el proyecto a un repositorio de GitHub e importarlo en [Vercel](https://vercel.com).
-   En *Environment Variables* cargar `DATABASE_URL` y `SESSION_SECRET` (una clave larga y aleatoria, por ejemplo la salida de `openssl rand -hex 32`).
-4. Deploy. Abrir la URL desde el celular y elegir **"Agregar a pantalla de inicio"** para instalarla como app.
+1. **Base de datos**: crear un proyecto en [Neon](https://neon.tech) (región São Paulo) y copiar la *connection string* (botón **Connect**).
+2. **Hosting**: en [Vercel](https://vercel.com) → *Add New → Project* → importar este repositorio de GitHub.
+3. En *Environment Variables* cargar:
+   - `DATABASE_URL` = la connection string de Neon
+   - `SESSION_SECRET` = una clave larga y aleatoria (por ejemplo, la salida de `openssl rand -hex 32`)
+   - `CARGAR_DEMO` = `si` *(opcional, solo para una versión de prueba: carga 30 días de ventas ficticias)*
+4. **Deploy**. En cada publicación, `scripts/vercel-build.mjs` crea o actualiza las tablas y, si la base está vacía,
+   carga los productos, medios de pago y usuarios iniciales. No hace falta ejecutar nada a mano.
+5. Abrir la URL desde el celular y elegir **"Agregar a pantalla de inicio"**; en la PC del local, *Instalar app* desde el navegador.
+
+Las funciones de la app corren en São Paulo (`vercel.json` → `gru1`), cerca de la base de datos.
 
 ## Cómo extenderla
 

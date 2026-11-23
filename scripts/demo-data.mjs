@@ -1,6 +1,7 @@
 // Genera ~30 días de ventas ficticias para mostrar la app. NO usar en producción.
 // Uso: npm run db:demo -- --si
 import postgres from "postgres";
+import { dbUrl } from "./db-url.mjs";
 import { randomUUID } from "node:crypto";
 import { loadEnv } from "./env.mjs";
 
@@ -9,7 +10,7 @@ if (!process.argv.includes("--si")) {
   process.exit(0);
 }
 loadEnv();
-const sql = postgres(process.env.DATABASE_URL, { prepare: false, onnotice: () => {} });
+const sql = postgres(dbUrl(), { prepare: false, onnotice: () => {} });
 const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 

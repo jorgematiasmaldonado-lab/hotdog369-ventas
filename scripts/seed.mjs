@@ -1,10 +1,11 @@
 // Carga los datos iniciales (solo si la base está vacía).
 import postgres from "postgres";
+import { dbUrl } from "./db-url.mjs";
 import bcrypt from "bcryptjs";
 import { loadEnv } from "./env.mjs";
 
 loadEnv();
-const sql = postgres(process.env.DATABASE_URL, { prepare: false, onnotice: () => {} });
+const sql = postgres(dbUrl(), { prepare: false, onnotice: () => {} });
 
 const [{ count }] = await sql`SELECT count(*)::int AS count FROM roles`;
 if (count > 0) {
