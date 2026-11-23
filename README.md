@@ -63,22 +63,34 @@ No lo ejecutes en la base real del negocio.
 
 ## Publicarla en internet (gratis para empezar)
 
-1. **Base de datos** — [Supabase](https://supabase.com) (recomendado) o [Neon](https://neon.tech), región **São Paulo**:
-   - Supabase: *New project* (contraseña solo con letras y números) → **Connect** → **Transaction pooler** (puerto 6543)
-     → copiar la URL y reemplazar `[YOUR-PASSWORD]`.
-   - Neon: botón **Connect** → copiar la *connection string*.
-   - La app solo usa la base de datos (no usa Supabase Auth ni Storage). Todas las tablas quedan con
-     Row Level Security activado sin políticas, así la Data API pública de Supabase no puede leerlas.
-2. **Hosting**: en [Vercel](https://vercel.com) → *Add New → Project* → importar este repositorio de GitHub.
-3. En *Environment Variables* cargar:
-   - `DATABASE_URL` = la URL de conexión del paso 1 (Supabase o Neon)
-   - `SESSION_SECRET` = una clave larga y aleatoria (por ejemplo, la salida de `openssl rand -hex 32`)
-   - `CARGAR_DEMO` = `si` *(opcional, solo para una versión de prueba: carga 30 días de ventas ficticias)*
-4. **Deploy**. En cada publicación, `scripts/vercel-build.mjs` crea o actualiza las tablas y, si la base está vacía,
-   carga los productos, medios de pago y usuarios iniciales. No hace falta ejecutar nada a mano.
-5. Abrir la URL desde el celular y elegir **"Agregar a pantalla de inicio"**; en la PC del local, *Instalar app* desde el navegador.
+### 1. Base de datos en Supabase (con el SQL Editor)
+1. *New project* → región a elección → contraseña **solo con letras y números** (anotarla).
+2. **SQL Editor → New query** → pegar todo `db/supabase/01_estructura_y_datos.sql` → **Run**.
+   Crea las tablas, activa RLS y carga productos, medios de pago, roles y usuarios.
+3. *(Opcional, solo para mostrar la app)* repetir con `db/supabase/02_demo_opcional.sql`: 30 días de ventas ficticias.
+4. **Connect → Direct → Transaction pooler** (puerto 6543) → copiar la URL y reemplazar `[YOUR-PASSWORD]`
+   (sin corchetes). Debe empezar con `postgresql://postgres.` y terminar en `pooler.supabase.com:6543/postgres`.
 
-Las funciones de la app corren en la región de `vercel.json` (`iad1`, Washington), la misma zona que la base de Supabase (us-east-1). Si la base se crea en São Paulo, cambiar a `gru1`.
+La app solo usa la base de datos (no usa Supabase Auth ni Storage). Todas las tablas tienen Row Level Security
+activado sin políticas, así la Data API pública de Supabase no puede leerlas; la app se conecta como dueña.
+
+### 2. La app en Vercel
+1. *Add New → Project* → importar este repositorio.
+2. *Environment Variables*:
+   - `DATABASE_URL` = la URL del paso 1.4
+   - `SESSION_SECRET` = una clave larga y aleatoria (por ejemplo, la salida de `openssl rand -hex 32`)
+3. **Deploy**. Vercel solo compila la app; no modifica la base.
+4. Abrir la URL desde el celular → **"Agregar a pantalla de inicio"**; en la PC del local → *Instalar app*.
+
+La región de las funciones está en `vercel.json` (`iad1`, Washington): conviene que coincida con la de Supabase
+(`us-east-1` → `iad1`; São Paulo → `gru1`).
+
+*Alternativa automática:* con `PREPARAR_BASE=si` (y opcionalmente `CARGAR_DEMO=si`) la publicación aplica
+las migraciones y los datos iniciales por su cuenta, sin usar el SQL Editor.
+
+### Cambios futuros en la base
+Cada cambio de estructura se agrega como `db/migrations/00X_*.sql`: se ejecuta en el SQL Editor de Supabase
+(y se registra en `schema_migrations`) o con `npm run db:migrate`.
 
 ## Cómo extenderla
 

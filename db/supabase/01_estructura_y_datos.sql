@@ -1,0 +1,400 @@
+-- =====================================================================
+-- HOT DOG 369 · Base de datos completa (estructura + datos iniciales)
+-- Cómo usar: Supabase → SQL Editor → New query → pegar TODO → Run.
+-- Ejecutar UNA sola vez, en un proyecto vacío.
+-- Crea las tablas, activa la seguridad (RLS) y carga productos, medios
+-- de pago, roles y usuarios iniciales:
+--   admin / PIN 3690 · empleado / PIN 1111 · dueno / PIN 2222
+-- (cambiar los PIN desde Administración → Usuarios)
+-- =====================================================================
+
+BEGIN;
+
+-- ---------- Estructura ----------
+-- HOT DOG 369 · Esquema inicial
+-- Montos en pesos enteros (numeric(12,2) para permitir centavos si algún día hiciera falta)
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE branches (
+  id          serial PRIMARY KEY,
+  name        text NOT NULL,
+  active      boolean NOT NULL DEFAULT true,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE roles (
+  id          serial PRIMARY KEY,
+  key         text NOT NULL UNIQUE,
+  name        text NOT NULL,
+  description text,
+  permissions text[] NOT NULL DEFAULT '{}',
+  is_system   boolean NOT NULL DEFAULT false,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE users (
+  id              serial PRIMARY KEY,
+  name            text NOT NULL,
+  username        text NOT NULL UNIQUE,
+  pin_hash        text NOT NULL,
+  role_id         int NOT NULL REFERENCES roles(id),
+  branch_id       int REFERENCES branches(id),
+  active          boolean NOT NULL DEFAULT true,
+  failed_attempts int NOT NULL DEFAULT 0,
+  locked_until    timestamptz,
+  session_version int NOT NULL DEFAULT 1,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE shift_types (
+  id      serial PRIMARY KEY,
+  name    text NOT NULL,
+  sort    int NOT NULL DEFAULT 0,
+  active  boolean NOT NULL DEFAULT true
+);
+
+CREATE TABLE shifts (
+  id             serial PRIMARY KEY,
+  branch_id      int NOT NULL REFERENCES branches(id),
+  user_id        int NOT NULL REFERENCES users(id),
+  shift_type_id  int REFERENCES shift_types(id),
+  status         text NOT NULL DEFAULT 'abierto' CHECK (status IN ('abierto','cerrado')),
+  opened_at      timestamptz NOT NULL DEFAULT now(),
+  closed_at      timestamptz,
+  opening_cash   numeric(12,2) NOT NULL DEFAULT 0,
+  expected_cash  numeric(12,2),
+  counted_cash   numeric(12,2),
+  difference     numeric(12,2),
+  notes          text
+);
+CREATE UNIQUE INDEX shifts_one_open_per_user ON shifts(user_id) WHERE status = 'abierto';
+
+CREATE TABLE categories (
+  id      serial PRIMARY KEY,
+  name    text NOT NULL,
+  color   text NOT NULL DEFAULT '#D71B22',
+  sort    int NOT NULL DEFAULT 0,
+  active  boolean NOT NULL DEFAULT true
+);
+
+CREATE TABLE products (
+  id           serial PRIMARY KEY,
+  category_id  int NOT NULL REFERENCES categories(id),
+  name         text NOT NULL,
+  price        numeric(12,2) NOT NULL CHECK (price >= 0),
+  color        text,
+  sort         int NOT NULL DEFAULT 0,
+  active       boolean NOT NULL DEFAULT true,
+  is_combo     boolean NOT NULL DEFAULT false,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+-- Componentes de un combo/promo (preparado para el futuro módulo de stock)
+CREATE TABLE combo_items (
+  combo_id    int NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  product_id  int NOT NULL REFERENCES products(id),
+  qty         int NOT NULL DEFAULT 1,
+  PRIMARY KEY (combo_id, product_id)
+);
+
+CREATE TABLE product_price_history (
+  id          serial PRIMARY KEY,
+  product_id  int NOT NULL REFERENCES products(id),
+  old_price   numeric(12,2),
+  new_price   numeric(12,2) NOT NULL,
+  changed_by  int REFERENCES users(id),
+  changed_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- kind: efectivo | transferencia | otro | fiado
+CREATE TABLE payment_methods (
+  id      serial PRIMARY KEY,
+  name    text NOT NULL,
+  kind    text NOT NULL DEFAULT 'otro' CHECK (kind IN ('efectivo','transferencia','otro','fiado')),
+  color   text NOT NULL DEFAULT '#64748B',
+  sort    int NOT NULL DEFAULT 0,
+  active  boolean NOT NULL DEFAULT true
+);
+
+CREATE TABLE customers (
+  id          serial PRIMARY KEY,
+  name        text NOT NULL,
+  phone       text,
+  notes       text,
+  active      boolean NOT NULL DEFAULT true,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE void_reasons (
+  id      serial PRIMARY KEY,
+  label   text NOT NULL,
+  sort    int NOT NULL DEFAULT 0,
+  active  boolean NOT NULL DEFAULT true
+);
+
+CREATE TABLE sales (
+  id             uuid PRIMARY KEY,            -- generado en el dispositivo (permite modo sin conexión sin duplicados)
+  number         bigserial UNIQUE,
+  branch_id      int NOT NULL REFERENCES branches(id),
+  shift_id       int REFERENCES shifts(id),
+  user_id        int NOT NULL REFERENCES users(id),
+  customer_id    int REFERENCES customers(id),
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  total          numeric(12,2) NOT NULL,
+  cash_received  numeric(12,2),
+  change_given   numeric(12,2),
+  status         text NOT NULL DEFAULT 'confirmada' CHECK (status IN ('confirmada','anulada')),
+  void_reason    text,
+  voided_by      int REFERENCES users(id),
+  voided_at      timestamptz,
+  edited_at      timestamptz,
+  edited_by      int REFERENCES users(id),
+  offline        boolean NOT NULL DEFAULT false
+);
+CREATE INDEX sales_created_at_idx ON sales(created_at);
+CREATE INDEX sales_shift_idx ON sales(shift_id);
+
+CREATE TABLE sale_items (
+  id            serial PRIMARY KEY,
+  sale_id       uuid NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+  product_id    int REFERENCES products(id),
+  product_name  text NOT NULL,
+  category_name text,
+  unit_price    numeric(12,2) NOT NULL,
+  qty           int NOT NULL CHECK (qty > 0),
+  subtotal      numeric(12,2) NOT NULL
+);
+CREATE INDEX sale_items_sale_idx ON sale_items(sale_id);
+
+CREATE TABLE sale_payments (
+  id                 serial PRIMARY KEY,
+  sale_id            uuid NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+  payment_method_id  int NOT NULL REFERENCES payment_methods(id),
+  amount             numeric(12,2) NOT NULL CHECK (amount > 0)
+);
+CREATE INDEX sale_payments_sale_idx ON sale_payments(sale_id);
+
+-- Cuenta corriente (fiados). cargo suma deuda; pago y anulacion la restan.
+CREATE TABLE customer_movements (
+  id                 serial PRIMARY KEY,
+  customer_id        int NOT NULL REFERENCES customers(id),
+  sale_id            uuid REFERENCES sales(id),
+  shift_id           int REFERENCES shifts(id),
+  type               text NOT NULL CHECK (type IN ('cargo','pago','anulacion','ajuste')),
+  amount             numeric(12,2) NOT NULL CHECK (amount > 0),
+  payment_method_id  int REFERENCES payment_methods(id),
+  user_id            int REFERENCES users(id),
+  notes              text,
+  created_at         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX customer_movements_customer_idx ON customer_movements(customer_id);
+
+CREATE TABLE expense_categories (
+  id      serial PRIMARY KEY,
+  name    text NOT NULL,
+  sort    int NOT NULL DEFAULT 0,
+  active  boolean NOT NULL DEFAULT true
+);
+
+CREATE TABLE expenses (
+  id                 serial PRIMARY KEY,
+  branch_id          int NOT NULL REFERENCES branches(id),
+  date               date NOT NULL,
+  supplier           text,
+  category_id        int REFERENCES expense_categories(id),
+  amount             numeric(12,2) NOT NULL CHECK (amount > 0),
+  payment_method_id  int REFERENCES payment_methods(id),
+  notes              text,
+  receipt_image      text,               -- imagen comprimida (data URL)
+  user_id            int REFERENCES users(id),
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  deleted_at         timestamptz
+);
+
+CREATE TABLE cash_movements (
+  id          serial PRIMARY KEY,
+  branch_id   int NOT NULL REFERENCES branches(id),
+  shift_id    int REFERENCES shifts(id),
+  type        text NOT NULL CHECK (type IN ('ingreso','retiro')),
+  amount      numeric(12,2) NOT NULL CHECK (amount > 0),
+  reason      text NOT NULL,
+  user_id     int REFERENCES users(id),
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE modules (
+  key          text PRIMARY KEY,
+  name         text NOT NULL,
+  description  text,
+  enabled      boolean NOT NULL DEFAULT false,
+  available    boolean NOT NULL DEFAULT true,   -- false = "próximamente"
+  config       jsonb NOT NULL DEFAULT '{}',
+  sort         int NOT NULL DEFAULT 0
+);
+
+CREATE TABLE settings (
+  key    text PRIMARY KEY,
+  value  jsonb NOT NULL
+);
+
+CREATE TABLE audit_log (
+  id          bigserial PRIMARY KEY,
+  at          timestamptz NOT NULL DEFAULT now(),
+  user_id     int REFERENCES users(id),
+  action      text NOT NULL,
+  entity      text NOT NULL,
+  entity_id   text,
+  before      jsonb,
+  after       jsonb,
+  notes       text
+);
+CREATE INDEX audit_log_at_idx ON audit_log(at DESC);
+
+-- ---------- Control de versiones de la base ----------
+CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
+
+-- ---------- Seguridad (RLS) ----------
+-- Seguridad para Supabase (y cualquier Postgres): activa Row Level Security en todas
+-- las tablas del esquema public, sin políticas. Así la Data API de Supabase (roles anon /
+-- authenticated) no puede leer ni modificar nada. La app se conecta como dueña de las
+-- tablas, que no está alcanzada por RLS, por lo que sigue funcionando igual.
+DO $$
+DECLARE t record;
+BEGIN
+  FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t.tablename);
+  END LOOP;
+END $$;
+
+-- ---------- Datos iniciales ----------
+
+INSERT INTO public.branches (id, name, active, created_at) VALUES (1, 'HOT DOG 369 - Local principal', true, '2026-11-23 21:13:49.84285+00');
+
+INSERT INTO public.roles (id, key, name, description, permissions, is_system, created_at) VALUES (1, 'admin', 'Administrador', 'Acceso total: edita, configura, reportes, gastos y caja.', '{ventas.crear,ventas.anular,ventas.ver_todas,ventas.editar,turnos.operar,turnos.ver_todos,fiados.gestionar,fiados.ver,caja.gestionar,gastos.gestionar,gastos.ver,dashboard.ver,reportes.ver,productos.gestionar,usuarios.gestionar,config.gestionar,auditoria.ver}', true, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.roles (id, key, name, description, permissions, is_system, created_at) VALUES (2, 'empleado', 'Empleado', 'Registra ventas, fiados y puede anular sus ventas indicando el motivo.', '{ventas.crear,ventas.anular,turnos.operar,fiados.gestionar,fiados.ver}', true, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.roles (id, key, name, description, permissions, is_system, created_at) VALUES (3, 'dueno', 'Dueño (solo lectura)', 'Ve ventas, reportes y movimientos. No puede cargar ni modificar nada.', '{ventas.ver_todas,turnos.ver_todos,fiados.ver,gastos.ver,dashboard.ver,reportes.ver,auditoria.ver}', true, '2026-11-23 21:13:49.84285+00');
+
+INSERT INTO public.users (id, name, username, pin_hash, role_id, branch_id, active, failed_attempts, locked_until, session_version, created_at) VALUES (1, 'Administrador', 'admin', '$2b$10$9ALloLiiwR0unYhDB0e2yu9F/2rwb4TzvLbcO4wH1MijTSkU3Pz/6', 1, 1, true, 0, NULL, 1, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.users (id, name, username, pin_hash, role_id, branch_id, active, failed_attempts, locked_until, session_version, created_at) VALUES (2, 'Empleado de prueba', 'empleado', '$2b$10$0AR0l0llqCPbe/Q7zAdtzuFPszfVgQJYFOlIoN3HMpkHSKwCC0wLm', 2, 1, true, 0, NULL, 1, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.users (id, name, username, pin_hash, role_id, branch_id, active, failed_attempts, locked_until, session_version, created_at) VALUES (3, 'Dueño', 'dueno', '$2b$10$8gFntL9qL4YmiCSbmjJtuuTAeeI2hqgpCFP.i1sDwZ.N9KfXTiSwO', 3, 1, true, 0, NULL, 1, '2026-11-23 21:13:49.84285+00');
+
+INSERT INTO public.shift_types (id, name, sort, active) VALUES (1, 'Mañana', 1, true);
+INSERT INTO public.shift_types (id, name, sort, active) VALUES (2, 'Tarde', 2, true);
+INSERT INTO public.shift_types (id, name, sort, active) VALUES (3, 'Noche', 3, true);
+
+INSERT INTO public.categories (id, name, color, sort, active) VALUES (1, 'Panchería', '#D71B22', 1, true);
+INSERT INTO public.categories (id, name, color, sort, active) VALUES (2, 'Cafetería', '#8B5A2B', 2, true);
+
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (1, 1, 'Pancho clásico', 5000.00, '#D71B22', 1, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (2, 1, 'Promo pancho + Coca 237 ml', 6800.00, '#D71B22', 2, true, true, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (3, 1, 'Promo pancho + jugo chico', 6000.00, '#D71B22', 3, true, true, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (4, 1, 'Pancho vegano', 8000.00, '#151A1D', 4, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (5, 1, 'Pancho alemán', 8000.00, '#D71B22', 5, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (6, 1, 'Tostado', 8000.00, '#151A1D', 6, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (7, 1, 'Postres', 4500.00, '#D71B22', 7, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (8, 1, 'Bebida 350 cc', 2100.00, '#151A1D', 8, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (9, 1, 'Coca 500 cc', 2500.00, '#D71B22', 9, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (10, 1, 'Agua 500 cc', 2500.00, '#151A1D', 10, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (11, 1, 'Latas', 2300.00, '#D71B22', 11, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (12, 1, 'Agua saborizada', 2500.00, '#151A1D', 12, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (13, 1, 'Coca 237 ml', 1800.00, '#D71B22', 13, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (14, 2, 'Café solo', 2500.00, '#8B5A2B', 1, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (15, 2, 'Café + 2 criollos', 4000.00, '#151A1D', 2, true, true, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (16, 2, 'Café + medialuna', 3500.00, '#8B5A2B', 3, true, true, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (17, 2, 'Café + medialuna + criollo', 4000.00, '#151A1D', 4, true, true, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (18, 2, 'Medialuna sola', 1000.00, '#8B5A2B', 5, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (19, 2, 'Criollo solo', 800.00, '#151A1D', 6, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (20, 2, 'Dulce solo', 500.00, '#8B5A2B', 7, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (21, 2, 'Manteca sola', 500.00, '#151A1D', 8, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (22, 2, 'Queso crema', 500.00, '#8B5A2B', 9, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (23, 2, 'Mermelada', 400.00, '#151A1D', 10, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (24, 2, 'Rockstar', 2500.00, '#8B5A2B', 11, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (25, 2, 'Powerade', 3000.00, '#151A1D', 12, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (26, 2, 'Monster', 4000.00, '#8B5A2B', 13, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (27, 2, 'Papas Lays', 4500.00, '#151A1D', 14, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (28, 2, 'Doritos', 4500.00, '#8B5A2B', 15, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (29, 2, 'Tostitos chicos', 4500.00, '#151A1D', 16, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (30, 2, 'Tostito grande', 6000.00, '#8B5A2B', 17, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (31, 2, 'Tortuguita de ternera', 6000.00, '#151A1D', 18, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (32, 2, 'Tortuguita de jamón y queso', 5000.00, '#8B5A2B', 19, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (33, 2, 'Alfajores premium', 3000.00, '#151A1D', 20, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (34, 2, 'Ramen', 4000.00, '#8B5A2B', 21, true, false, '2026-11-23 21:13:49.84285+00');
+INSERT INTO public.products (id, category_id, name, price, color, sort, active, is_combo, created_at) VALUES (35, 2, 'Pizzetas', 4500.00, '#151A1D', 22, true, false, '2026-11-23 21:13:49.84285+00');
+
+INSERT INTO public.payment_methods (id, name, kind, color, sort, active) VALUES (1, 'Efectivo', 'efectivo', '#16A34A', 1, true);
+INSERT INTO public.payment_methods (id, name, kind, color, sort, active) VALUES (2, 'Transferencia', 'transferencia', '#2563EB', 2, true);
+INSERT INTO public.payment_methods (id, name, kind, color, sort, active) VALUES (3, 'Mercado Pago / QR', 'otro', '#0EA5E9', 3, true);
+INSERT INTO public.payment_methods (id, name, kind, color, sort, active) VALUES (4, 'Débito', 'otro', '#7C3AED', 4, true);
+INSERT INTO public.payment_methods (id, name, kind, color, sort, active) VALUES (5, 'Crédito', 'otro', '#DB2777', 5, true);
+INSERT INTO public.payment_methods (id, name, kind, color, sort, active) VALUES (6, 'Fiado', 'fiado', '#F59E0B', 6, true);
+
+INSERT INTO public.expense_categories (id, name, sort, active) VALUES (1, 'Mercadería', 1, true);
+INSERT INTO public.expense_categories (id, name, sort, active) VALUES (2, 'Bebidas', 2, true);
+INSERT INTO public.expense_categories (id, name, sort, active) VALUES (3, 'Descartables', 3, true);
+INSERT INTO public.expense_categories (id, name, sort, active) VALUES (4, 'Servicios', 4, true);
+INSERT INTO public.expense_categories (id, name, sort, active) VALUES (5, 'Sueldos', 5, true);
+INSERT INTO public.expense_categories (id, name, sort, active) VALUES (6, 'Otros', 6, true);
+
+INSERT INTO public.modules (key, name, description, enabled, available, config, sort) VALUES ('fiados', 'Fiados / cuentas corrientes', 'Ventas a cuenta de clientes y cobro de deudas.', true, true, '{}', 1);
+INSERT INTO public.modules (key, name, description, enabled, available, config, sort) VALUES ('gastos', 'Gastos y compras', 'Registro de compras de mercadería y otros gastos.', true, true, '{}', 2);
+INSERT INTO public.modules (key, name, description, enabled, available, config, sort) VALUES ('caja', 'Movimientos de caja', 'Ingresos y retiros manuales de efectivo.', true, true, '{}', 3);
+INSERT INTO public.modules (key, name, description, enabled, available, config, sort) VALUES ('sin_conexion', 'Modo sin conexión', 'Guarda las ventas si se corta internet y las sincroniza después.', true, true, '{}', 4);
+INSERT INTO public.modules (key, name, description, enabled, available, config, sort) VALUES ('stock', 'Control de stock', 'Descuenta insumos por venta y avisa cuando hay poco.', false, false, '{}', 10);
+INSERT INTO public.modules (key, name, description, enabled, available, config, sort) VALUES ('promos_horario', 'Promos por día y horario', 'Descuentos automáticos (ej. happy hour).', false, false, '{}', 11);
+INSERT INTO public.modules (key, name, description, enabled, available, config, sort) VALUES ('delivery', 'Pedidos para llevar / delivery', 'Tomar pedidos con datos de entrega.', false, false, '{}', 12);
+INSERT INTO public.modules (key, name, description, enabled, available, config, sort) VALUES ('sucursales', 'Varias sucursales', 'Administrar más de un local.', false, false, '{}', 13);
+INSERT INTO public.modules (key, name, description, enabled, available, config, sort) VALUES ('impresion', 'Ticketera / facturación', 'Imprimir tickets o emitir factura electrónica.', false, false, '{}', 14);
+
+INSERT INTO public.schema_migrations (name, applied_at) VALUES ('001_init.sql', '2026-11-23 21:13:49.669736+00');
+INSERT INTO public.schema_migrations (name, applied_at) VALUES ('002_rls.sql', '2026-11-23 21:13:49.761794+00');
+
+INSERT INTO public.settings (key, value) VALUES ('business_name', '"HOT DOG 369"');
+INSERT INTO public.settings (key, value) VALUES ('fiado_alert_days', '15');
+INSERT INTO public.settings (key, value) VALUES ('ticket_footer', '"¡Gracias por tu compra!"');
+
+INSERT INTO public.void_reasons (id, label, sort, active) VALUES (1, 'Error de carga', 1, true);
+INSERT INTO public.void_reasons (id, label, sort, active) VALUES (2, 'Cliente se arrepintió', 2, true);
+INSERT INTO public.void_reasons (id, label, sort, active) VALUES (3, 'Producto faltante', 3, true);
+INSERT INTO public.void_reasons (id, label, sort, active) VALUES (4, 'Venta duplicada', 4, true);
+
+SELECT pg_catalog.setval('public.audit_log_id_seq', 1, false);
+
+SELECT pg_catalog.setval('public.branches_id_seq', 1, true);
+
+SELECT pg_catalog.setval('public.cash_movements_id_seq', 1, false);
+
+SELECT pg_catalog.setval('public.categories_id_seq', 2, true);
+
+SELECT pg_catalog.setval('public.customer_movements_id_seq', 1, false);
+
+SELECT pg_catalog.setval('public.customers_id_seq', 1, false);
+
+SELECT pg_catalog.setval('public.expense_categories_id_seq', 6, true);
+
+SELECT pg_catalog.setval('public.expenses_id_seq', 1, false);
+
+SELECT pg_catalog.setval('public.payment_methods_id_seq', 6, true);
+
+SELECT pg_catalog.setval('public.product_price_history_id_seq', 1, false);
+
+SELECT pg_catalog.setval('public.products_id_seq', 35, true);
+
+SELECT pg_catalog.setval('public.roles_id_seq', 3, true);
+
+SELECT pg_catalog.setval('public.sale_items_id_seq', 1, false);
+
+SELECT pg_catalog.setval('public.sale_payments_id_seq', 1, false);
+
+SELECT pg_catalog.setval('public.sales_number_seq', 1, false);
+
+SELECT pg_catalog.setval('public.shift_types_id_seq', 3, true);
+
+SELECT pg_catalog.setval('public.shifts_id_seq', 1, false);
+
+SELECT pg_catalog.setval('public.users_id_seq', 3, true);
+
+SELECT pg_catalog.setval('public.void_reasons_id_seq', 4, true);
+
+
+COMMIT;
