@@ -16,6 +16,9 @@ function create() {
     // En servidores serverless (Vercel) con el pooler de Supabase conviene 1 conexión por
     // instancia: las consultas en paralelo se encolan en ella y no se abren conexiones de más.
     max: Number(process.env.DB_MAX_CONNECTIONS) || (process.env.NODE_ENV === "production" ? 1 : 10),
+    // Sin "pipelining": el Transaction pooler de Supabase (Supavisor) deja colgadas las
+    // consultas enviadas en tubería sobre la misma conexión. Así cada consulta espera a la anterior.
+    ...({ max_pipeline: 0 } as object), // opción soportada por postgres.js aunque no figure en sus tipos
     idle_timeout: 20,
     connect_timeout: 10,
     onnotice: () => {},
