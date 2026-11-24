@@ -207,7 +207,7 @@ export function Stat({ label, value, sub, tone, icon }: { label: string; value: 
     <div className={cx("rounded-2xl border p-4 shadow-sm",
       tone === "brand" ? "bg-primary text-white border-primary" : tone === "accent" ? "bg-accent text-brand-black border-accent" : "bg-surface border-border")}>
       <div className={cx("flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide", tone ? "opacity-90" : "text-muted")}>{icon}{label}</div>
-      <div className="mt-1 text-2xl font-extrabold tabular-nums">{value}</div>
+      <div className="mt-1 whitespace-nowrap text-[clamp(1.05rem,5.4vw,1.5rem)] font-extrabold tabular-nums">{value}</div>
       {sub && <div className={cx("mt-0.5 text-xs", tone ? "opacity-90" : "text-muted")}>{sub}</div>}
     </div>
   );
