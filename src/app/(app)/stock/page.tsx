@@ -13,7 +13,7 @@ import { ars, fmtDateTime } from "@/lib/format";
 
 type Item = {
   id: number; name: string; unit: string; quantity: number; min_quantity: number; cost: number | null; count_on_shift: boolean;
-  sort: number; active: boolean; low: boolean; used_by: { product_id: number; name: string; qty: number }[] | null; last_in: string | null; sold_7d: number;
+  sort: number; active: boolean; low: boolean; units_per_pack?: number | null; used_by: { product_id: number; name: string; qty: number }[] | null; last_in: string | null; sold_7d: number;
 };
 type Tab = "articulos" | "recetas" | "movimientos" | "controles";
 const q = (n: number) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 3 }).format(Number(n));
@@ -101,6 +101,7 @@ function ItemCard({ item: i, manage, onEdit, onChange }: { item: Item; manage: b
         <div>
           <div className={cx("text-3xl font-extrabold tabular-nums", i.quantity < 0 ? "text-bad" : i.low ? "text-warn" : "")}>{q(i.quantity)} <span className="text-base font-semibold text-muted">{i.unit}</span></div>
           <div className="text-xs text-muted">Mínimo {q(i.min_quantity)} · vendido 7 días: {q(i.sold_7d)}{i.cost != null && ` · costo ${ars(i.cost)}`}</div>
+          {i.units_per_pack ? <div className="text-xs text-muted">Paquete de {i.units_per_pack} {i.unit}{i.quantity > 0 && ` · ≈ ${Math.floor(i.quantity / i.units_per_pack)} paq. + ${q(i.quantity % i.units_per_pack)} sueltas`}</div> : null}
         </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5">
@@ -174,7 +175,7 @@ function HistoryModal({ item, onClose }: { item: Item; onClose: () => void }) {
 
 function ItemModal({ item, onClose, onDone }: { item: Item | null; onClose: () => void; onDone: () => void }) {
   const { data: catalog } = useSWR<Catalog>("/api/catalog", fetcher);
-  const [f, setF] = useState({ name: item?.name ?? "", unit: item?.unit ?? "u", min_quantity: String(item?.min_quantity ?? ""), cost: item?.cost ? String(item.cost) : "", count_on_shift: item?.count_on_shift ?? true, sort: item?.sort ?? 0, active: item?.active ?? true });
+  const [f, setF] = useState({ name: item?.name ?? "", unit: item?.unit ?? "u", min_quantity: String(item?.min_quantity ?? ""), cost: item?.cost ? String(item.cost) : "", count_on_shift: item?.count_on_shift ?? true, sort: item?.sort ?? 0, active: item?.active ?? true, units_per_pack: item?.units_per_pack ? String(item.units_per_pack) : "" });
   const [initial, setInitial] = useState("");
   const [link, setLink] = useState<number | "">("");
   const [busy, setBusy] = useState(false);
@@ -182,7 +183,7 @@ function ItemModal({ item, onClose, onDone }: { item: Item | null; onClose: () =
   const save = async () => {
     setBusy(true);
     try {
-      const body = { ...f, min_quantity: Number(f.min_quantity.replace(",", ".") || 0), cost: f.cost ? Number(f.cost) : null };
+      const body = { ...f, min_quantity: Number(f.min_quantity.replace(",", ".") || 0), cost: f.cost ? Number(f.cost) : null, units_per_pack: f.units_per_pack ? Number(f.units_per_pack) : null };
       if (item) await api(`/api/stock/${item.id}`, { method: "PUT", body });
       else await api("/api/stock", { body: { ...body, quantity: initial ? Number(initial.replace(",", ".")) : 0, link_products: link ? [{ product_id: link, qty: 1 }] : [] } });
       toast("Guardado"); onDone(); onClose();
@@ -199,6 +200,9 @@ function ItemModal({ item, onClose, onDone }: { item: Item | null; onClose: () =
         </Field>
         <Field label="Avisar cuando quede menos de"><Input inputMode="decimal" value={f.min_quantity} onChange={(e) => setF({ ...f, min_quantity: e.target.value.replace(/[^\d.,]/g, "") })} /></Field>
         <Field label="Costo por unidad (opcional)"><MoneyInput value={f.cost} onChange={(v) => setF({ ...f, cost: v })} /></Field>
+        <Field label="Unidades por paquete (opcional)" hint="Si viene en paquetes, el control al abrir turno pide paquetes cerrados + sueltas. Cambialo si el proveedor cambia el tamaño.">
+          <Input inputMode="numeric" placeholder="ej: 18" value={f.units_per_pack} onChange={(e) => setF({ ...f, units_per_pack: e.target.value.replace(/\D/g, "").slice(0, 4) })} />
+        </Field>
         {!item && <Field label="Cantidad que hay hoy"><Input inputMode="decimal" value={initial} onChange={(e) => setInitial(e.target.value.replace(/[^\d.,]/g, ""))} /></Field>}
         {!item && (
           <Field label="¿Qué producto lo descuenta? (1 por venta)" className="sm:col-span-2" hint="Podés sumar más productos o cambiar cantidades en “Qué descuenta cada producto”.">
@@ -389,7 +393,7 @@ function Movements() {
 function Counts() {
   const [range, setRange] = useState<Range>({ range: "semana" });
   const [open, setOpen] = useState<number | null>(null);
-  const { data } = useSWR<{ id: number; created_at: string; items_count: number; differences: number; notes: string | null; user_name: string; shift_type: string | null; lines: { name: string; unit: string; expected: number; counted: number; difference: number }[] | null }[]>(`/api/stock/counts${qs(range)}`, fetcher);
+  const { data } = useSWR<{ id: number; created_at: string; items_count: number; differences: number; notes: string | null; user_name: string; shift_type: string | null; lines: { name: string; unit: string; expected: number; counted: number; difference: number; packs?: number | null; loose?: number | null; units_per_pack?: number | null }[] | null }[]>(`/api/stock/counts${qs(range)}`, fetcher);
   return (
     <div>
       <RangePicker value={range} onChange={setRange} />
@@ -408,7 +412,7 @@ function Counts() {
                   <table className="w-full text-sm">
                     <thead><tr className="text-left text-xs uppercase text-muted"><th className="py-1">Artículo</th><th className="text-right">Sistema</th><th className="text-right">Contado</th><th className="text-right">Diferencia</th></tr></thead>
                     <tbody>{c.lines?.map((l) => (
-                      <tr key={l.name} className="border-t border-border"><td className="py-1.5">{l.name}</td><td className="text-right tabular-nums">{q(l.expected)}</td><td className="text-right tabular-nums">{q(l.counted)}</td>
+                      <tr key={l.name} className="border-t border-border"><td className="py-1.5">{l.name}</td><td className="text-right tabular-nums">{q(l.expected)}</td><td className="text-right tabular-nums">{q(l.counted)}{l.packs != null && <div className="text-xs text-muted">{q(l.packs)} paq. × {l.units_per_pack} + {q(l.loose ?? 0)} sueltas</div>}</td>
                         <td className={cx("text-right font-bold tabular-nums", l.difference < 0 ? "text-bad" : l.difference > 0 ? "text-warn" : "text-muted")}>{l.difference > 0 ? "+" : ""}{q(l.difference)} {l.unit}</td></tr>
                     ))}</tbody>
                   </table>

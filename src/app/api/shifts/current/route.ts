@@ -3,7 +3,9 @@ import { route } from "@/lib/api";
 import { requireUser, can } from "@/lib/auth";
 import { stockSettings } from "@/lib/stock";
 import { personalEnabled } from "@/lib/hours";
-import { shiftSummary } from "@/lib/shifts";
+import { shiftSummary, blindSummary } from "@/lib/shifts";
+import { getNextOpeningCash } from "@/lib/opening";
+import { schemaOk } from "@/lib/schema";
 
 // Turno abierto del usuario actual (con resumen) + turnos abiertos de otros
 export const GET = route(async () => {
@@ -25,5 +27,11 @@ export const GET = route(async () => {
     const [open] = await sql`SELECT 1 FROM time_entries WHERE user_id = ${user.id} AND clock_out IS NULL`;
     hours = { enabled: true, clocked_in: !!open };
   }
-  return { shift: s ? await shiftSummary(s.id) : null, stock_check, hours };
+  const full = s ? await shiftSummary(s.id) : null;
+  // Quien no ve todos los turnos (el empleado) recibe el turno sin montos esperados: cierre a ciegas
+  const shift = full && !can(user, "turnos.ver_todos") ? blindSummary(full) : full;
+  // Caja inicial para el próximo turno: la define el administrador
+  const v2 = await schemaOk();
+  const opening = { next: v2 ? await getNextOpeningCash(sql) : null, editable: !v2 || can(user, "caja.gestionar"), managed: v2 };
+  return { shift, stock_check, hours, opening };
 });

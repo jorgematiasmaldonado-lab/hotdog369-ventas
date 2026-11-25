@@ -13,7 +13,8 @@ Tu usuario es de **solo lectura**: podés ver todo pero no tenés botones para c
 - **Panel**: lo vendido hoy en tiempo real (se actualiza solo cada pocos segundos), cantidad de ventas, ticket promedio, cuánto entró en efectivo, transferencia y otros medios, fiados, anulaciones, ventas por hora, los 5 productos más vendidos, quién está atendiendo y las últimas ventas. Arriba podés cambiar a *Ayer*, *Esta semana*, *Este mes* o elegir fechas.
 - **Ventas**: todas las ventas con su detalle, filtros por estado y medio de pago, y las anuladas con su motivo.
 - **Reportes**: días y horarios que más venden (mapa de calor), productos, rendimiento por empleado, arqueos de caja, anulaciones, gastos contra ingresos y fiados. Se exportan a Excel o se imprimen/guardan en PDF.
-- **Turnos**: cada turno con su total y la diferencia de caja al cerrar.
+- **Turnos**: cada turno con su total y el arqueo: por cada medio de pago, **lo que debería haber, lo que declaró el empleado y la diferencia** (faltante o sobrante). El empleado nunca ve lo que debería haber.
+- **Horas**: horas fichadas por empleado, valor hora y **a cobrar** (horas × valor hora), por 1ª quincena, 2ª quincena, quincena anterior o mes.
 - **Fiados**: quién debe, cuánto y desde cuándo.
 - **Gastos**: compras de mercadería y otros gastos registrados.
 - **Modo oscuro**: botón 🌙/☀️ arriba a la derecha.

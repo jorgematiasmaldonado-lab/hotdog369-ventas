@@ -2,7 +2,8 @@ import { sql } from "@/lib/db";
 import { route, body, id, str, ApiError } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { parseDateTime } from "@/lib/hours";
+import { parseDateTime, parseRate } from "@/lib/hours";
+import { schemaOk } from "@/lib/schema";
 
 export const PUT = route(async (req, { params }) => {
   const me = await requireUser("horas.gestionar");
@@ -15,6 +16,10 @@ export const PUT = route(async (req, { params }) => {
   if (cout && cout <= cin) throw new ApiError(400, "La salida tiene que ser posterior a la entrada.");
   const [e] = await sql`UPDATE time_entries SET clock_in = ${cin}, clock_out = ${cout}, edited_by = ${me.id},
     notes = ${str(b.notes, "nota", { required: false, max: 300 })} WHERE id = ${eid} RETURNING *`;
+  if ("hourly_rate" in b && (await schemaOk())) {
+    const [r] = await sql`UPDATE time_entries SET hourly_rate = ${parseRate(b.hourly_rate)} WHERE id = ${eid} RETURNING *`;
+    Object.assign(e, r);
+  }
   await audit(sql, me.id, "editar", "horas", eid, before, e);
   return e;
 });

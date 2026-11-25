@@ -2,7 +2,8 @@ import { sql } from "@/lib/db";
 import { route, body, num, str, ApiError } from "@/lib/api";
 import { requireUser, requireModule } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { parseDateTime } from "@/lib/hours";
+import { parseDateTime, parseRate } from "@/lib/hours";
+import { schemaOk } from "@/lib/schema";
 
 // Carga manual de una fichada (por ejemplo, si alguien se olvidó de fichar)
 export const POST = route(async (req) => {
@@ -17,8 +18,14 @@ export const POST = route(async (req) => {
     const [open] = await sql`SELECT 1 FROM time_entries WHERE user_id = ${userId} AND clock_out IS NULL`;
     if (open) throw new ApiError(409, "Ese empleado ya tiene una entrada abierta.");
   }
-  const [e] = await sql`INSERT INTO time_entries (user_id, clock_in, clock_out, source, notes, created_by)
-    VALUES (${userId}, ${cin}, ${cout}, 'manual', ${str(b.notes, "nota", { required: false, max: 300 })}, ${me.id}) RETURNING *`;
+  const notes = str(b.notes, "nota", { required: false, max: 300 });
+  // Valor hora: el indicado, o el vigente del empleado
+  const rate = parseRate(b.hourly_rate);
+  const [e] = (await schemaOk())
+    ? await sql`INSERT INTO time_entries (user_id, clock_in, clock_out, source, notes, created_by, hourly_rate)
+        VALUES (${userId}, ${cin}, ${cout}, 'manual', ${notes}, ${me.id}, COALESCE(${rate}::numeric, (SELECT hourly_rate FROM users WHERE id = ${userId}))) RETURNING *`
+    : await sql`INSERT INTO time_entries (user_id, clock_in, clock_out, source, notes, created_by)
+        VALUES (${userId}, ${cin}, ${cout}, 'manual', ${notes}, ${me.id}) RETURNING *`;
   await audit(sql, me.id, "crear", "horas", e.id, undefined, e);
   return e;
 });

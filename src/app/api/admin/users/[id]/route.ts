@@ -3,6 +3,7 @@ import { route, body, id, ApiError } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { parseUser } from "@/lib/users";
+import { schemaOk } from "@/lib/schema";
 
 export const PUT = route(async (req, { params }) => {
   const me = await requireUser("usuarios.gestionar");
@@ -18,6 +19,7 @@ export const PUT = route(async (req, { params }) => {
     pin_hash = COALESCE(${u.pin_hash ?? null}, pin_hash), failed_attempts = 0, locked_until = NULL,
     session_version = session_version + ${bump ? 1 : 0}
     WHERE id = ${uid} RETURNING id, name, username, role_id, active`;
+  if (u.hourly_rate !== undefined && (await schemaOk())) await sql`UPDATE users SET hourly_rate = ${u.hourly_rate} WHERE id = ${uid}`;
   await audit(sql, me.id, "editar", "usuario", uid, before, { ...row, pin: u.pin_hash ? "(cambiado)" : undefined });
   return row;
 });

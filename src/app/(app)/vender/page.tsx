@@ -15,8 +15,9 @@ import type { Catalog, PaymentMethod, Product, SaleRow } from "@/lib/client/type
 import { ars, fmtTime } from "@/lib/format";
 
 type CartLine = { product: Product; qty: number };
-type ShiftInfo = { shift: { id: number; opened_at: string; shift_type_name: string | null; opening_cash: number }; totals: { sales_count: number; sales_total: number } } | null;
-type CurrentShift = { shift: ShiftInfo; stock_check?: { required: boolean; mode: string }; hours?: { enabled: boolean; clocked_in: boolean } };
+type ShiftInfo = { blind?: boolean; shift: { id: number; opened_at: string; shift_type_name: string | null; opening_cash: number }; totals: { sales_count: number; sales_total?: number } } | null;
+type Opening = { next: number | null; editable: boolean; managed: boolean };
+type CurrentShift = { shift: ShiftInfo; stock_check?: { required: boolean; mode: string }; hours?: { enabled: boolean; clocked_in: boolean }; opening?: Opening };
 
 export default function VenderPage() {
   const { can, mod } = useMe();
@@ -76,7 +77,7 @@ export default function VenderPage() {
   if (!catalog || (!cur && !shiftErr)) return <Loading />;
 
   const shift = cur?.shift ?? null;
-  if (!shift) return <OpenShift catalog={catalog} hours={cur?.hours} onOpened={() => refreshShift()} />;
+  if (!shift) return <OpenShift catalog={catalog} hours={cur?.hours} opening={cur?.opening} onOpened={() => refreshShift()} />;
   const sc = cur?.stock_check;
   if (sc?.required && online && skipCount !== shift.shift.id)
     return <StockCount mode={sc.mode} onDone={() => refreshShift()}
@@ -135,7 +136,7 @@ export default function VenderPage() {
             <span>Turno <b>{shift.shift.shift_type_name ?? ""}</b> desde {fmtTime(shift.shift.opened_at)}</span>
           </div>
           <div className="flex items-center gap-3 text-sm">
-            <span><b className="tabular-nums">{shift.totals.sales_count}</b> ventas · <b className="tabular-nums text-brand-yellow">{ars(shift.totals.sales_total)}</b></span>
+            <span><b className="tabular-nums">{shift.totals.sales_count}</b> ventas{shift.totals.sales_total != null && <> · <b className="tabular-nums text-brand-yellow">{ars(shift.totals.sales_total)}</b></>}</span>
             <Link href="/turno" className="rounded-lg bg-white/10 px-2.5 py-1 font-semibold hover:bg-white/20">Cerrar turno</Link>
           </div>
         </div>
@@ -274,16 +275,26 @@ export default function VenderPage() {
   );
 }
 
-function OpenShift({ catalog, hours, onOpened }: { catalog: Catalog; hours?: { enabled: boolean; clocked_in: boolean }; onOpened: () => void }) {
+function OpenShift({ catalog, hours, opening, onOpened }: { catalog: Catalog; hours?: { enabled: boolean; clocked_in: boolean }; opening?: Opening; onOpened: () => void }) {
+  const editable = opening?.editable ?? true;
+  const next = opening?.next ?? null;
   const [type, setType] = useState<number | "">(catalog.shiftTypes[0]?.id ?? "");
-  const [cash, setCash] = useState("");
+  const [cash, setCash] = useState(next != null ? String(next) : "");
+  const [ok, setOk] = useState(false);
+  const [note, setNote] = useState("");
   const [clock, setClock] = useState(true);
   const [loading, setLoading] = useState(false);
   const toast = useToast();
+  const pending = !editable && next == null;
+  // El empleado confirma que contó la caja, o deja una observación si no coincide
+  const canOpen = editable || pending || ok || note.trim().length >= 3;
   const open = async () => {
     setLoading(true);
     try {
-      await api("/api/shifts", { body: { shift_type_id: type || null, opening_cash: Number(cash || 0), clock_in: !!hours?.enabled && !hours.clocked_in && clock } });
+      await api("/api/shifts", { body: {
+        shift_type_id: type || null, clock_in: !!hours?.enabled && !hours.clocked_in && clock,
+        ...(editable ? { opening_cash: Number(cash || 0) } : { opening_confirmed: ok, opening_note: note.trim() || null }),
+      } });
       toast("Turno abierto. ¡Buenas ventas!");
       onOpened();
     } catch (e) {
@@ -298,7 +309,7 @@ function OpenShift({ catalog, hours, onOpened }: { catalog: Catalog; hours?: { e
         <div className="mb-4 text-center">
           <Clock className="mx-auto size-10 text-primary" />
           <h1 className="mt-2 font-display text-3xl uppercase">Abrir turno</h1>
-          <p className="text-sm text-muted">Antes de vender, abrí tu turno con el efectivo que hay en la caja.</p>
+          <p className="text-sm text-muted">{editable ? "Antes de vender, abrí tu turno con el efectivo que hay en la caja." : "Antes de vender, contá la caja y abrí tu turno."}</p>
         </div>
         <div className="space-y-3">
           <Field label="Turno">
@@ -308,11 +319,29 @@ function OpenShift({ catalog, hours, onOpened }: { catalog: Catalog; hours?: { e
               ))}
             </div>
           </Field>
-          <Field label="Efectivo inicial en caja"><MoneyInput value={cash} onChange={setCash} /></Field>
+          {editable ? (
+            <Field label="Efectivo inicial en caja" hint={next != null ? "Monto cargado para este turno. Podés corregirlo." : undefined}><MoneyInput value={cash} onChange={setCash} /></Field>
+          ) : pending ? (
+            <div className="rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm">
+              <div className="font-bold text-warn">Caja inicial pendiente</div>
+              <div className="text-text-2">El administrador todavía no cargó el efectivo inicial. Podés abrir y vender igual; lo completa después.</div>
+            </div>
+          ) : (
+            <>
+              <div className="rounded-xl bg-surface-2 p-3 text-center">
+                <div className="text-sm text-muted">Efectivo inicial en caja (lo define el administrador)</div>
+                <div className="text-3xl font-extrabold tabular-nums">{ars(next!)}</div>
+              </div>
+              <label className="flex items-center justify-between gap-3 rounded-xl bg-surface-2 px-3 py-3 font-semibold">
+                Conté la caja y está bien<input type="checkbox" className="size-5" checked={ok} onChange={(e) => setOk(e.target.checked)} />
+              </label>
+              {!ok && <Field label="Si no coincide, anotá qué encontraste"><Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="ej: hay $2.000 menos" /></Field>}
+            </>
+          )}
           {hours?.enabled && (hours.clocked_in
             ? <div className="rounded-xl bg-good/10 px-3 py-2.5 text-sm font-semibold text-good">✓ Ya fichaste tu entrada</div>
             : <label className="flex items-center justify-between rounded-xl bg-surface-2 px-3 py-3 font-semibold">Fichar mi entrada ahora<input type="checkbox" className="size-5" checked={clock} onChange={(e) => setClock(e.target.checked)} /></label>)}
-          <Button size="lg" className="w-full" loading={loading} onClick={open}>Abrir turno</Button>
+          <Button size="lg" className="w-full" loading={loading} disabled={!canOpen} onClick={open}>Abrir turno</Button>
         </div>
       </Card>
     </div>

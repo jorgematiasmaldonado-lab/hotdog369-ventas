@@ -6,9 +6,11 @@ Si te equivocás 5 veces seguidas, el usuario se bloquea 5 minutos.
 
 ## 2. Abrir el turno
 La primera vez en el día la app te pide **abrir el turno**:
-1. Elegí el turno (Mañana / Tarde / Noche).
-2. Escribí el **efectivo que hay en la caja** al empezar.
-3. Tocá **Abrir turno**.
+1. **Control de stock**: contá las Salchichas Paty, las Salchichas Alemanas y los panes. En cada uno anotá los **paquetes cerrados** y las **unidades sueltas** por separado (si no hay, poné 0).
+2. Elegí el turno (Mañana / Tarde / Noche).
+3. Vas a ver el **efectivo inicial** que cargó el administrador (no se puede cambiar). Contá la caja y marcá **Conté la caja y está bien**; si no coincide, escribí qué encontraste.
+   Si dice *Caja inicial pendiente*, abrí igual: el administrador la completa después.
+4. Tocá **Abrir turno**.
 
 ## 3. Cargar una venta
 1. Tocá el producto (cada toque suma 1; el número amarillo indica cuántos llevás). Cambiá entre **Panchería** y **Cafetería** arriba, o usá **Buscar**.
@@ -31,5 +33,8 @@ Si se corta la conexión aparece el aviso **Sin conexión**. Podés seguir vendi
 
 ## 6. Cerrar el turno
 1. Menú **Mi turno**.
-2. Contá el efectivo de la caja y escribilo en **Efectivo contado**. La app te muestra si hay sobrante o faltante.
-3. **Cerrar turno** → se genera el reporte de cierre (se puede imprimir o mandar por WhatsApp).
+2. Completá **cada medio de pago**: el efectivo que hay en la caja (incluida la caja inicial), lo recibido por transferencia, Mercado Pago / QR, débito y crédito. Si en alguno no hubo nada, poné 0. La app suma el **total declarado**.
+3. **Cerrar turno**. El administrador revisa después si el arqueo coincide.
+
+## 7. Mis horas
+En **Horas** fichás entrada y salida, y ves tus horas de la semana, del mes y de la **quincena**, y cuánto llevás ganado según tu valor hora.

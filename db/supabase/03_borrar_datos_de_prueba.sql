@@ -29,6 +29,7 @@ BEGIN
   IF to_regclass('public.stock_items') IS NOT NULL THEN
     UPDATE stock_items SET quantity = 0;
   END IF;
+  DELETE FROM settings WHERE key = 'next_opening_cash';  -- caja cargada para el próximo turno
 END $$;
 
 -- Resumen: todo en 0 menos lo que se conserva

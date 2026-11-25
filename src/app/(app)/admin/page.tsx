@@ -4,7 +4,7 @@ import useSWR from "swr";
 import { Plus, Pencil, Trash2, Lock, ShieldCheck } from "lucide-react";
 import { useMe } from "@/components/me";
 import { NoAccess } from "@/components/app-shell";
-import { Badge, Button, Card, Empty, Field, Input, Loading, Modal, PageTitle, Select, Tabs, Textarea, cx, useToast } from "@/components/ui";
+import { Badge, Button, Card, Empty, Field, Input, Loading, Modal, MoneyInput, PageTitle, Select, Tabs, Textarea, cx, useToast } from "@/components/ui";
 import { CatalogManager } from "./catalog-manager";
 import { Respaldo } from "./respaldo";
 import { api, fetcher } from "@/lib/client/fetcher";
@@ -60,7 +60,7 @@ export default function AdminPage() {
   );
 }
 
-type U = { id: number; name: string; username: string; role_id: number; role_name: string; active: boolean; locked: boolean };
+type U = { id: number; name: string; username: string; role_id: number; role_name: string; active: boolean; locked: boolean; hourly_rate?: number | null };
 function Users() {
   const { me } = useMe();
   const { data, mutate } = useSWR<{ users: U[]; roles: { id: number; name: string }[] }>("/api/admin/users", fetcher);
@@ -86,7 +86,8 @@ function Users() {
 }
 
 function UserModal({ user, roles, onClose, onDone }: { user: U | null; roles: { id: number; name: string }[]; onClose: () => void; onDone: () => void }) {
-  const [f, setF] = useState({ name: user?.name ?? "", username: user?.username ?? "", pin: "", role_id: user?.role_id ?? roles.find((r) => r.name === "Empleado")?.id ?? roles[0].id, active: user?.active ?? true });
+  const [f, setF] = useState({ name: user?.name ?? "", username: user?.username ?? "", pin: "", role_id: user?.role_id ?? roles.find((r) => r.name === "Empleado")?.id ?? roles[0].id, active: user?.active ?? true,
+    hourly_rate: user?.hourly_rate != null ? String(user.hourly_rate) : "" });
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const save = async () => {
@@ -111,6 +112,9 @@ function UserModal({ user, roles, onClose, onDone }: { user: U | null; roles: { 
           <Input inputMode="numeric" value={f.pin} onChange={(e) => setF({ ...f, pin: e.target.value.replace(/\D/g, "").slice(0, 6) })} />
         </Field>
         <Field label="Rol"><Select value={f.role_id} onChange={(e) => setF({ ...f, role_id: Number(e.target.value) })}>{roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</Select></Field>
+        <Field label="Valor de la hora (opcional)" hint="Se usa para calcular cuánto cobra según las horas fichadas.">
+          <MoneyInput value={f.hourly_rate} onChange={(v) => setF({ ...f, hourly_rate: v })} />
+        </Field>
         <label className="flex items-center justify-between rounded-xl bg-surface-2 px-3 py-3 font-semibold">Activo<input type="checkbox" className="size-5" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /></label>
       </div>
     </Modal>

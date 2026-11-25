@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { ApiError, str, num, bool } from "./api";
+import { parseRate } from "./hours";
 
 export function parseUser(b: Record<string, unknown>, creating: boolean) {
   const username = str(b.username, "usuario", { max: 40 })!.toLowerCase();
@@ -12,5 +13,7 @@ export function parseUser(b: Record<string, unknown>, creating: boolean) {
     role_id: num(b.role_id, "rol", { int: true })!,
     active: bool(b.active, true),
     pin_hash: pin ? bcrypt.hashSync(pin, 10) : undefined,
+    // undefined = no se envió (no se toca)
+    hourly_rate: "hourly_rate" in b ? parseRate(b.hourly_rate) : undefined,
   };
 }

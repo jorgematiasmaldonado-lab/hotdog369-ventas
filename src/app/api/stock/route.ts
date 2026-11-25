@@ -3,6 +3,7 @@ import { route, body } from "@/lib/api";
 import { requireUser, requireModule } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { moveStock } from "@/lib/stock";
+import { schemaOk } from "@/lib/schema";
 import { parseStockItem, parseQty } from "@/lib/stock-input";
 
 // Artículos de stock con su estado y los productos que los usan
@@ -28,7 +29,7 @@ export const POST = route(async (req) => {
   const user = await requireUser("stock.gestionar");
   await requireModule("stock");
   const b = await body(req);
-  const it = parseStockItem(b);
+  const it = parseStockItem(b, await schemaOk());
   const initial = b.quantity !== undefined && b.quantity !== "" ? parseQty(b.quantity, "cantidad inicial", true) : 0;
   const link = Array.isArray(b.link_products) ? (b.link_products as { product_id: number; qty: number }[]) : [];
   return sql.begin(async (tx) => {

@@ -41,5 +41,34 @@ export async function shiftSummary(shiftId: number, db: Tx = sql) {
   const cashCollections = collections.filter((m) => m.kind === "efectivo").reduce((a, m) => a + m.amount, 0);
   const expected_cash = shift.opening_cash + cashSales + cashCollections + cash.ingresos - cash.retiros;
 
-  return { shift, totals, byMethod, collections, cash, items, cashSales, cashCollections, expected_cash };
+  // Lo que debería haber por cada medio de pago (el fiado no entra: no es dinero recibido)
+  const methods = await db`SELECT id, name, kind FROM payment_methods WHERE kind <> 'fiado' ORDER BY sort, name`;
+  const firstCash = methods.find((m) => m.kind === "efectivo")?.id;
+  const expected = methods
+    .map((m) => {
+      const sales = byMethod.filter((x) => x.id === m.id).reduce((a, x) => a + x.amount, 0);
+      const coll = collections.filter((x) => x.id === m.id).reduce((a, x) => a + x.amount, 0);
+      const base = m.id === firstCash ? shift.opening_cash + cash.ingresos - cash.retiros : 0;
+      return { id: m.id as number, name: m.name as string, kind: m.kind as string, amount: Math.round((base + sales + coll) * 100) / 100 };
+    });
+  const expected_total = expected.reduce((a, m) => a + m.amount, 0);
+
+  return { shift, totals, byMethod, collections, cash, items, cashSales, cashCollections, expected_cash, expected, expected_total, methods };
+}
+
+export type ShiftSummary = NonNullable<Awaited<ReturnType<typeof shiftSummary>>>;
+
+/** Versión para el empleado: sin montos esperados ni totales (cierre a ciegas). */
+export function blindSummary(s: ShiftSummary) {
+  const sh = s.shift;
+  return {
+    blind: true,
+    shift: {
+      id: sh.id, status: sh.status, opened_at: sh.opened_at, closed_at: sh.closed_at, user_id: sh.user_id, user_name: sh.user_name,
+      shift_type_name: sh.shift_type_name, opening_cash: sh.opening_cash, opening_pending: !!sh.opening_pending,
+    },
+    totals: { sales_count: s.totals.sales_count, voided_count: s.totals.voided_count },
+    items: s.items.map((i) => ({ product_name: i.product_name, category_name: i.category_name, qty: i.qty })),
+    methods: s.methods.map((m) => ({ id: m.id, name: m.name, kind: m.kind })),
+  };
 }

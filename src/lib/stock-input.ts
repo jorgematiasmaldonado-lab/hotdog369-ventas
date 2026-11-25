@@ -1,8 +1,10 @@
 import { ApiError, bool, num, str } from "./api";
 
-export function parseStockItem(b: Record<string, unknown>) {
+export function parseStockItem(b: Record<string, unknown>, withPacks = false) {
   const unit = str(b.unit ?? "u", "unidad", { max: 12 })!;
+  const packs = withPacks ? { units_per_pack: num(b.units_per_pack, "unidades por paquete", { required: false, int: true, min: 1 }) } : {};
   return {
+    ...packs,
     name: str(b.name, "nombre", { max: 80 })!,
     unit,
     min_quantity: num(b.min_quantity ?? 0, "stock mínimo", { min: 0 })!,

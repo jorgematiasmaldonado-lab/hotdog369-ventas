@@ -17,7 +17,21 @@ export function weekday(date: string): number {
   return new Date(date + "T12:00:00Z").getUTCDay();
 }
 
-export type RangeKey = "hoy" | "ayer" | "semana" | "mes" | "personalizado";
+export type RangeKey = "hoy" | "ayer" | "semana" | "mes" | "q1" | "q2" | "quincena" | "quincena_anterior" | "personalizado";
+
+/** Último día del mes de la fecha dada */
+export function monthEnd(date: string): string {
+  const d = new Date(date.slice(0, 8) + "01T12:00:00Z");
+  d.setUTCMonth(d.getUTCMonth() + 1);
+  d.setUTCDate(0);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Quincena que contiene la fecha: 1 al 15, o 16 a fin de mes */
+export function quincenaOf(date: string): { from: string; to: string } {
+  const m = date.slice(0, 8);
+  return Number(date.slice(8)) <= 15 ? { from: m + "01", to: m + "15" } : { from: m + "16", to: monthEnd(date) };
+}
 
 /** Devuelve el rango [from, to] (fechas locales inclusivas) */
 export function resolveRange(range: string | null, from?: string | null, to?: string | null): { from: string; to: string } {
@@ -33,6 +47,14 @@ export function resolveRange(range: string | null, from?: string | null, to?: st
     }
     case "mes":
       return { from: today.slice(0, 8) + "01", to: today };
+    case "q1":
+      return { from: today.slice(0, 8) + "01", to: today.slice(0, 8) + "15" };
+    case "q2":
+      return { from: today.slice(0, 8) + "16", to: monthEnd(today) };
+    case "quincena":
+      return quincenaOf(today);
+    case "quincena_anterior":
+      return quincenaOf(addDays(quincenaOf(today).from, -1));
     case "personalizado":
       if (from && to && /^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to))
         return from <= to ? { from, to } : { from: to, to: from };

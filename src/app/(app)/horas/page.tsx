@@ -1,11 +1,12 @@
 "use client";
 import { useMemo, useState } from "react";
 import useSWR from "swr";
-import { LogIn, LogOut, Plus, CalendarOff, Pencil, Trash2, Clock, Download } from "lucide-react";
+import { LogIn, LogOut, Plus, CalendarOff, Pencil, Trash2, Clock, Download, Wallet } from "lucide-react";
 import { useMe } from "@/components/me";
 import { NoAccess } from "@/components/app-shell";
-import { Badge, Button, Card, Empty, Field, Input, Loading, Modal, PageTitle, Select, Stat, Tabs, Textarea, cx, useToast } from "@/components/ui";
-import { RangePicker, type Range } from "@/components/range-picker";
+import { Badge, Button, Card, Empty, Field, Input, Loading, Modal, MoneyInput, PageTitle, Select, Stat, Tabs, Textarea, cx, useToast } from "@/components/ui";
+import { ars } from "@/lib/format";
+import { RangePicker, QUINCENA_OPTS, type Range } from "@/components/range-picker";
 import { api, fetcher, qs } from "@/lib/client/fetcher";
 import { fmtDate, fmtDateTime, fmtTime, DAYS_SHORT } from "@/lib/format";
 import { addDays, localDate } from "@/lib/dates";
@@ -29,10 +30,10 @@ const toLocalInput = (iso: string | null) => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
-type Entry = { id: number; user_id: number; clock_in: string; clock_out: string | null; source: string; notes: string | null; day: string; hours: number; edited_by_name: string | null };
+type Entry = { id: number; user_id: number; clock_in: string; clock_out: string | null; source: string; notes: string | null; day: string; hours: number; edited_by_name: string | null; hourly_rate: number | null };
 type Off = { id: number; user_id: number; date: string; type: string; notes: string | null };
-type Data = { from: string; to: string; users: { id: number; name: string; role_name: string }[]; entries: Entry[]; off: Off[];
-  summary: { user_id: number; name: string; role_name: string; hours: number; days_worked: number; open: boolean; franco: number; vacaciones: number; enfermedad: number; falta: number; licencia: number; otro: number }[] };
+type Data = { from: string; to: string; users: { id: number; name: string; role_name: string; hourly_rate: number | null }[]; entries: Entry[]; off: Off[]; rates?: boolean;
+  summary: { user_id: number; name: string; role_name: string; hours: number; hourly_rate: number | null; amount: number; days_worked: number; open: boolean; franco: number; vacaciones: number; enfermedad: number; falta: number; licencia: number; otro: number }[] };
 
 export default function HorasPage() {
   const { can, mod } = useMe();
@@ -48,7 +49,8 @@ export default function HorasPage() {
 
 function MyAttendance() {
   const toast = useToast();
-  const { data, mutate } = useSWR<{ open: { clock_in: string } | null; entries: { id: number; clock_in: string; clock_out: string | null; hours: number; source: string }[]; week: number; month: number; off: Off[] }>("/api/hours/me", fetcher, { refreshInterval: 60000 });
+  const { data, mutate } = useSWR<{ open: { clock_in: string } | null; entries: { id: number; clock_in: string; clock_out: string | null; hours: number; source: string }[]; week: number; month: number; off: Off[];
+    quincena?: { from: string; to: string; hours: number; amount: number | null }; hourly_rate?: number | null }>("/api/hours/me", fetcher, { refreshInterval: 60000 });
   const [busy, setBusy] = useState(false);
   if (!data) return <Loading />;
   const clock = async (action: "in" | "out") => {
@@ -70,7 +72,12 @@ function MyAttendance() {
         <div className="mt-4 grid grid-cols-2 gap-2">
           <Stat label="Esta semana" value={hrs(data.week)} />
           <Stat label="Este mes" value={hrs(data.month)} />
+          {data.quincena && <Stat label="Esta quincena" value={hrs(data.quincena.hours)} sub={`${fmtDate(data.quincena.from)} al ${fmtDate(data.quincena.to)}`} />}
+          {data.quincena && data.hourly_rate != null && data.quincena.amount != null && (
+            <Stat tone="accent" label="Llevo ganado" value={ars(data.quincena.amount)} sub={`Valor hora ${ars(data.hourly_rate)}`} />
+          )}
         </div>
+        {data.quincena && data.hourly_rate == null && <p className="mt-2 text-center text-xs text-muted">Tu valor hora todavía no está cargado.</p>}
       </Card>
       <Card title="Mis últimas fichadas">
         {!data.entries.length && !data.off.length ? <Empty>Todavía no hay fichadas.</Empty> : (
@@ -100,6 +107,7 @@ function Team() {
   const { data, mutate } = useSWR<Data>(`/api/hours${qs(range)}`, fetcher, { refreshInterval: 60000 });
   const [entry, setEntry] = useState<Partial<Entry> | null>(null);
   const [off, setOff] = useState<{ user_id?: number; date?: string } | null>(null);
+  const [rate, setRate] = useState<{ user_id: number; name: string; hourly_rate: number | null } | null>(null);
   const toast = useToast();
 
   const days = useMemo(() => {
@@ -111,8 +119,9 @@ function Team() {
 
   const exportCsv = () => {
     if (!data) return;
-    const head = ["Empleado", "Horas", "Días trabajados", "Francos", "Vacaciones", "Enfermedad", "Faltas", "Licencias"];
-    const rows = data.summary.map((s) => [s.name, s.hours.toFixed(2).replace(".", ","), s.days_worked, s.franco, s.vacaciones, s.enfermedad, s.falta, s.licencia]);
+    const dec = (n: number) => n.toFixed(2).replace(".", ",");
+    const head = ["Empleado", "Horas", "Valor hora", "A cobrar", "Días trabajados", "Francos", "Vacaciones", "Enfermedad", "Faltas", "Licencias"];
+    const rows = data.summary.map((s) => [s.name, dec(s.hours), s.hourly_rate == null ? "" : dec(s.hourly_rate), dec(s.amount), s.days_worked, s.franco, s.vacaciones, s.enfermedad, s.falta, s.licencia]);
     const csv = "﻿" + [head, ...rows].map((r) => r.join(";")).join("\r\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -130,7 +139,8 @@ function Team() {
           {manage && <Button size="sm" onClick={() => setEntry({})}><Plus className="size-4" />Cargar fichada</Button>}
         </div>
       </div>
-      <RangePicker value={range} onChange={setRange} />
+      <RangePicker value={range} onChange={setRange} extra={QUINCENA_OPTS} />
+      {data && <p className="-mt-2 mb-3 text-xs text-muted">Del {fmtDate(data.from)} al {fmtDate(data.to)}</p>}
       <Tabs className="mb-4" value={tab} onChange={setTab} items={[{ value: "resumen", label: "Resumen" }, { value: "planilla", label: "Planilla por día" }, { value: "fichadas", label: "Fichadas" }]} />
       {!data ? <Loading /> : (
         <>
@@ -138,17 +148,31 @@ function Team() {
             <Card className="overflow-x-auto">
               {!data.summary.length ? <Empty>No hay personal con fichadas.</Empty> : (
                 <table className="w-full min-w-[640px] text-sm">
-                  <thead><tr className="border-b border-border text-left text-xs uppercase text-muted"><th className="py-2">Empleado</th><th className="text-right">Horas</th><th className="text-right">Días trab.</th><th className="text-right">Francos</th><th className="text-right">Vacac.</th><th className="text-right">Enferm.</th><th className="text-right">Faltas</th></tr></thead>
+                  <thead><tr className="border-b border-border text-left text-xs uppercase text-muted"><th className="py-2">Empleado</th><th className="text-right">Horas</th>{data.rates && <><th className="text-right">Valor hora</th><th className="text-right">A cobrar</th></>}<th className="text-right">Días trab.</th><th className="text-right">Francos</th><th className="text-right">Vacac.</th><th className="text-right">Enferm.</th><th className="text-right">Faltas</th></tr></thead>
                   <tbody>{data.summary.map((s) => (
                     <tr key={s.user_id} className="border-b border-border">
                       <td className="py-2 font-semibold">{s.name} {s.open && <Badge tone="good">adentro ahora</Badge>}</td>
-                      <td className="text-right font-bold tabular-nums">{hrs(s.hours)}</td><td className="text-right tabular-nums">{s.days_worked}</td>
+                      <td className="text-right font-bold tabular-nums">{hrs(s.hours)}</td>
+                      {data.rates && <>
+                        <td className="text-right tabular-nums">
+                          {manage ? <button onClick={() => setRate({ user_id: s.user_id, name: s.name, hourly_rate: s.hourly_rate })} className="inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 hover:bg-surface-2">
+                            {s.hourly_rate == null ? <span className="text-primary">Cargar</span> : ars(s.hourly_rate)}<Pencil className="size-3 text-muted" /></button>
+                            : s.hourly_rate == null ? "—" : ars(s.hourly_rate)}
+                        </td>
+                        <td className="text-right font-bold tabular-nums">{ars(s.amount)}</td>
+                      </>}
+                      <td className="text-right tabular-nums">{s.days_worked}</td>
                       <td className="text-right tabular-nums">{s.franco}</td><td className="text-right tabular-nums">{s.vacaciones}</td><td className="text-right tabular-nums">{s.enfermedad}</td>
                       <td className={cx("text-right tabular-nums", s.falta > 0 && "font-bold text-bad")}>{s.falta}</td>
                     </tr>
                   ))}</tbody>
+                  {data.rates && data.summary.length > 1 && (
+                    <tfoot><tr className="font-bold"><td className="py-2">Total</td><td className="text-right tabular-nums">{hrs(data.summary.reduce((a, s) => a + s.hours, 0))}</td><td />
+                      <td className="text-right tabular-nums">{ars(data.summary.reduce((a, s) => a + s.amount, 0))}</td><td colSpan={4} /></tr></tfoot>
+                  )}
                 </table>
               )}
+              {data.rates && <p className="mt-2 text-xs text-muted">A cobrar = horas fichadas × valor hora. Los francos y ausencias no se pagan.</p>}
             </Card>
           )}
           {tab === "planilla" && (
@@ -210,6 +234,7 @@ function Team() {
         </>
       )}
       {entry && data && <EntryModal entry={entry} users={data.users} onClose={() => setEntry(null)} onDone={() => mutate()} />}
+      {rate && <RateModal init={rate} from={data?.from} onClose={() => setRate(null)} onDone={() => mutate()} />}
       {off && data && <OffModal init={off} users={data.users} onClose={() => setOff(null)} onDone={() => mutate()} />}
     </div>
   );
@@ -217,13 +242,15 @@ function Team() {
 
 function EntryModal({ entry, users, onClose, onDone }: { entry: Partial<Entry>; users: Data["users"]; onClose: () => void; onDone: () => void }) {
   const editing = !!entry.id;
-  const [f, setF] = useState({ user_id: entry.user_id ?? users[0]?.id ?? "", clock_in: toLocalInput(entry.clock_in ?? null), clock_out: toLocalInput(entry.clock_out ?? null), notes: entry.notes ?? "" });
+  const [f, setF] = useState({ user_id: entry.user_id ?? users[0]?.id ?? "", clock_in: toLocalInput(entry.clock_in ?? null), clock_out: toLocalInput(entry.clock_out ?? null), notes: entry.notes ?? "",
+    hourly_rate: entry.hourly_rate != null ? String(entry.hourly_rate) : "" });
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   const save = async () => {
     setBusy(true);
     try {
-      const body = { user_id: f.user_id, clock_in: new Date(f.clock_in).toISOString(), clock_out: f.clock_out ? new Date(f.clock_out).toISOString() : null, notes: f.notes };
+      const body = { user_id: f.user_id, clock_in: new Date(f.clock_in).toISOString(), clock_out: f.clock_out ? new Date(f.clock_out).toISOString() : null, notes: f.notes,
+        ...(f.hourly_rate !== "" || editing ? { hourly_rate: f.hourly_rate === "" ? null : Number(f.hourly_rate) } : {}) };
       if (editing) await api(`/api/hours/entries/${entry.id}`, { method: "PUT", body }); else await api("/api/hours/entries", { body });
       toast("Fichada guardada"); onDone(); onClose();
     } catch (e) { toast((e as Error).message, "bad"); } finally { setBusy(false); }
@@ -241,8 +268,35 @@ function EntryModal({ entry, users, onClose, onDone }: { entry: Partial<Entry>; 
           <Field label="Entrada"><Input type="datetime-local" value={f.clock_in} onChange={(e) => setF({ ...f, clock_in: e.target.value })} /></Field>
           <Field label="Salida" hint="Vacío = sigue adentro"><Input type="datetime-local" value={f.clock_out} onChange={(e) => setF({ ...f, clock_out: e.target.value })} /></Field>
         </div>
+        <Field label="Valor hora de esta fichada (opcional)" hint="Vacío = usa el valor actual del empleado">
+          <MoneyInput value={f.hourly_rate} onChange={(v) => setF({ ...f, hourly_rate: v })} />
+        </Field>
         <Field label="Nota (opcional)"><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="ej: se olvidó de fichar la salida" /></Field>
         <p className="text-xs text-muted">Las correcciones quedan registradas en la auditoría.</p>
+      </div>
+    </Modal>
+  );
+}
+
+function RateModal({ init, from, onClose, onDone }: { init: { user_id: number; name: string; hourly_rate: number | null }; from?: string; onClose: () => void; onDone: () => void }) {
+  const [val, setVal] = useState(init.hourly_rate == null ? "" : String(init.hourly_rate));
+  const [apply, setApply] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api("/api/hours/rate", { method: "PUT", body: { user_id: init.user_id, hourly_rate: val === "" ? null : Number(val), apply_from: apply ? from : undefined } });
+      toast("Valor hora guardado"); onDone(); onClose();
+    } catch (e) { toast((e as Error).message, "bad"); } finally { setBusy(false); }
+  };
+  return (
+    <Modal open onClose={onClose} title={<span className="flex items-center gap-2"><Wallet className="size-5 text-primary" />Valor hora · {init.name}</span>}
+      footer={<Button className="w-full" loading={busy} onClick={save}>Guardar</Button>}>
+      <div className="space-y-3">
+        <Field label="Valor de la hora" hint="Las fichadas nuevas usan este valor. Las anteriores no cambian."><MoneyInput value={val} onChange={setVal} autoFocus /></Field>
+        {from && <label className="flex items-center justify-between gap-3 rounded-xl bg-surface-2 px-3 py-3 text-sm font-semibold">
+          Aplicar también a las fichadas sin valor desde el {fmtDate(from)}<input type="checkbox" className="size-5" checked={apply} onChange={(e) => setApply(e.target.checked)} /></label>}
       </div>
     </Modal>
   );
