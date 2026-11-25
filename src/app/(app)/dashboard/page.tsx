@@ -12,7 +12,7 @@ import { PushInvite } from "@/components/push-setup";
 import { fetcher, qs } from "@/lib/client/fetcher";
 import { ars, fmtDate, fmtTime, int } from "@/lib/format";
 
-type K = { count: number; total: number; avg_ticket: number; efectivo: number; transferencia: number; otros: number; fiado: number; voided_count: number; voided_total: number; methods: { name: string; color: string; amount: number }[] };
+type K = { count: number; total: number; avg_ticket: number; efectivo: number; transferencia: number; otros: number; fiado: number; voided_count: number; voided_total: number; surcharge?: number; methods: { name: string; color: string; amount: number; surcharge?: number }[] };
 type D = {
   from: string; to: string; current: K; previous: K;
   hourly: { hour: number; count: number; total: number }[];
@@ -66,6 +66,8 @@ export default function Dashboard() {
             <Stat label="Transferencia" value={ars(c.transferencia)} icon={<Landmark className="size-3.5" />} />
             <Stat label="Otros medios" value={ars(c.otros)} icon={<CreditCard className="size-3.5" />} />
             {mod("fiados") && <Stat label="Fiado del período" value={ars(c.fiado)} icon={<UserRound className="size-3.5" />} sub={`Total adeudado: ${ars(data.fiadoPending)}`} />}
+            {!!c.surcharge && <Stat label="Recargos cobrados" value={ars(c.surcharge)} icon={<CreditCard className="size-3.5" />}
+              sub={c.methods.filter((m) => m.surcharge).map((m) => `${m.name} ${ars(m.surcharge!)}`).join(" · ")} />}
             <Stat label="Anulaciones" value={ars(c.voided_total)} icon={<Ban className="size-3.5" />} sub={`${c.voided_count} venta${c.voided_count === 1 ? "" : "s"} anulada${c.voided_count === 1 ? "" : "s"}`} />
           </div>
 

@@ -1,4 +1,5 @@
 "use client";
+import { surchargeFor } from "@/lib/surcharge";
 import { use, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
@@ -62,13 +63,15 @@ function PayModal({ open, onClose, customerId, balance, onDone }: { open: boolea
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const methods = catalog?.paymentMethods.filter((m) => m.kind !== "fiado") ?? [];
+  // Recargo por comisión del medio elegido: se cobra aparte, la deuda baja en "Monto"
+  const extra = surchargeFor(Number(amount || 0), methods.find((m) => m.id === pm)?.surcharge_pct);
   return (
     <Modal open={open} onClose={onClose} title="Registrar cobro de fiado"
       footer={<Button className="w-full" size="lg" loading={loading} disabled={!amount || Number(amount) > balance || !pm} onClick={async () => {
         setLoading(true);
         try { await api(`/api/customers/${customerId}/payments`, { body: { amount: Number(amount), payment_method_id: pm, notes } }); toast("Cobro registrado"); setAmount(""); setNotes(""); onDone(); onClose(); }
         catch (e) { toast((e as Error).message, "bad"); } finally { setLoading(false); }
-      }}>Registrar {amount ? ars(Number(amount)) : ""}</Button>}>
+      }}>{extra > 0 ? `Cobré ${ars(Number(amount) + extra)} · Registrar` : `Registrar ${amount ? ars(Number(amount)) : ""}`}</Button>}>
       <div className="space-y-3">
         <Field label="Monto" hint={<button className="font-semibold text-primary" onClick={() => setAmount(String(balance))}>Cobrar todo ({ars(balance)})</button>}>
           <MoneyInput value={amount} onChange={setAmount} autoFocus />
@@ -79,6 +82,12 @@ function PayModal({ open, onClose, customerId, balance, onDone }: { open: boolea
             {methods.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </Select>
         </Field>
+        {extra > 0 && (
+          <div className="rounded-xl bg-accent/25 p-3 text-center">
+            <div className="text-sm">Deuda que se cancela: {ars(Number(amount))} + recargo {ars(extra)}</div>
+            <div className="text-2xl font-extrabold tabular-nums">Cobrar {ars(Number(amount) + extra)}</div>
+          </div>
+        )}
         <Field label="Nota (opcional)"><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
       </div>
     </Modal>

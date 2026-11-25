@@ -6,7 +6,7 @@ import { Badge, Button, Card, Empty, Field, Input, Loading, Modal, MoneyInput, S
 import { api, fetcher } from "@/lib/client/fetcher";
 import { ars, fmtDateTime } from "@/lib/format";
 
-type FieldDef = { type: "text" | "int" | "money" | "color" | "bool" | "select" | "time" | "days"; label: string; required?: boolean; options?: string[]; ref?: string; hint?: string };
+type FieldDef = { type: "text" | "int" | "money" | "color" | "bool" | "select" | "time" | "days" | "percent"; label: string; required?: boolean; options?: string[]; ref?: string; hint?: string };
 const DAY_NAMES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const daysText = (d: string) => (d === "0123456" ? "Todos los días" : [1, 2, 3, 4, 5, 6, 0].filter((i) => d.includes(String(i))).map((i) => DAY_NAMES[i]).join(" "));
 type Resp = { def: { label: string; fields: Record<string, FieldDef> }; rows: Record<string, unknown>[]; refs: Record<string, { id: number; name: string }[]> };
@@ -53,6 +53,7 @@ export function CatalogManager({ entity }: { entity: string }) {
                 <div className="flex flex-wrap gap-1.5 text-xs text-muted">
                   {catRef && <span>{catRef.find((c) => c.id === r.category_id)?.name}</span>}
                   {"kind" in f && <span>Tipo: {String(r.kind)}</span>}
+                  {"surcharge_pct" in f && Number(r.surcharge_pct) > 0 && <Badge tone="accent">Recargo {String(r.surcharge_pct).replace(".", ",")} %</Badge>}
                   {"start_time" in f && <span>{r.start_time ? `Empieza ${String(r.start_time)}` : "Sin horario"}</span>}
                   {"days" in f && typeof r.days === "string" && <span>· {daysText(r.days)}</span>}
                   {r.is_combo === true && <Badge tone="accent">Promo</Badge>}
@@ -76,7 +77,7 @@ export function CatalogManager({ entity }: { entity: string }) {
 function EditRow({ entity, def, refs, row, defaultCategory, onClose, onDone }: { entity: string; def: Resp["def"]; refs: Resp["refs"]; row: Record<string, unknown> | null; defaultCategory: string; onClose: () => void; onDone: () => void }) {
   const init: Record<string, unknown> = {};
   for (const [k, f] of Object.entries(def.fields)) {
-    init[k] = row ? row[k] : f.type === "bool" ? k === "active" : f.type === "int" ? 0 : f.type === "days" ? "0123456" : f.type === "time" ? "" : f.type === "color" ? "#D71B22" : f.type === "select" ? (f.options?.[0] ?? (k === "category_id" && defaultCategory ? Number(defaultCategory) : refs[f.ref!]?.[0]?.id)) : "";
+    init[k] = row ? row[k] : f.type === "bool" ? k === "active" : f.type === "int" ? 0 : f.type === "days" ? "0123456" : f.type === "percent" ? 0 : f.type === "time" ? "" : f.type === "color" ? "#D71B22" : f.type === "select" ? (f.options?.[0] ?? (k === "category_id" && defaultCategory ? Number(defaultCategory) : refs[f.ref!]?.[0]?.id)) : "";
   }
   const [v, setV] = useState(init);
   const [loading, setLoading] = useState(false);
@@ -116,6 +117,7 @@ function EditRow({ entity, def, refs, row, defaultCategory, onClose, onDone }: {
                   })}
                 </div>
               )
+                : f.type === "percent" ? <Input inputMode="decimal" value={String(v[k] ?? "")} placeholder="0" onChange={(e) => set(e.target.value.replace(/[^\d.,]/g, "").slice(0, 6))} />
                 : f.type === "time" ? <Input type="time" value={String(v[k] ?? "")} onChange={(e) => set(e.target.value)} />
                 : f.type === "money" ? <MoneyInput value={v[k] === "" || v[k] == null ? "" : String(v[k])} onChange={(x) => set(x === "" ? "" : Number(x))} />
                 : f.type === "color" ? (

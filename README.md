@@ -88,7 +88,8 @@ quedan ocultas (lo demás sigue funcionando).
 - `06_actualizacion_caja_horas.sql`: caja inicial que carga el administrador, cierre de turno a ciegas
   (el empleado cuenta el efectivo sin ver lo esperado; los demás medios son opcionales), control de stock por paquetes y sueltas
   (Salchicha Paty, Salchicha Alemana y Pan de pancho), valor hora del personal con quincenas, horario de cada
-  turno y aviso de apertura tarde.
+  turno, aviso de apertura tarde y recargo por medio de pago (comisión de QR / tarjetas, cálculo exacto
+  redondeado hacia arriba a $10; ver `src/lib/surcharge.ts`).
 - `07_avisos_automaticos.sql` (después del 06): programa en Supabase (pg_cron + pg_net) un control cada 10 minutos
   que llama a `/api/cron/turnos`; si un turno no se abrió a tiempo, la app avisa al celular del dueño y del
   administrador. La llamada lleva una clave aleatoria guardada en la base (`settings.cron_secret`). Si la app cambia

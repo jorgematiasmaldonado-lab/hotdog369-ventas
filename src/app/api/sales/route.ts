@@ -1,3 +1,4 @@
+import { schemaOk } from "@/lib/schema";
 import { after } from "next/server";
 import { notifyLowStock } from "@/lib/push";
 import { sql, TZ } from "@/lib/db";
@@ -41,13 +42,14 @@ export const GET = route(async (req) => {
     }
   }
 
+  const v2 = await schemaOk();
   const rows = await sql`
-    SELECT s.id, s.number, s.created_at, s.total, s.status, s.void_reason, s.voided_at, s.edited_at, s.offline,
+    SELECT ${v2 ? sql`s.surcharge_total,` : sql``} s.id, s.number, s.created_at, s.total, s.status, s.void_reason, s.voided_at, s.edited_at, s.offline,
            s.cash_received, s.change_given,
            u.name AS user_name, vu.name AS voided_by_name, c.name AS customer_name,
            (SELECT json_agg(json_build_object('name', si.product_name, 'qty', si.qty, 'subtotal', si.subtotal) ORDER BY si.id)
               FROM sale_items si WHERE si.sale_id = s.id) AS items,
-           (SELECT json_agg(json_build_object('name', pm.name, 'kind', pm.kind, 'amount', sp.amount) ORDER BY sp.id)
+           (SELECT json_agg(json_build_object('name', pm.name, 'kind', pm.kind, 'amount', sp.amount, 'surcharge', ${v2 ? sql`sp.surcharge` : sql`0`}) ORDER BY sp.id)
               FROM sale_payments sp JOIN payment_methods pm ON pm.id = sp.payment_method_id WHERE sp.sale_id = s.id) AS payments
     FROM sales s JOIN users u ON u.id = s.user_id LEFT JOIN users vu ON vu.id = s.voided_by LEFT JOIN customers c ON c.id = s.customer_id
     WHERE ${where}

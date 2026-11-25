@@ -67,6 +67,7 @@ function Resumen({ d }: { d: R }) {
         <Stat label="Otros medios" value={ars(s.otros)} />
         <Stat label="Fiado" value={ars(s.fiado)} />
         <Stat label="Anuladas" value={`${s.voided_count} · ${ars(s.voided_total)}`} />
+        {!!s.surcharge && <Stat label="Recargos cobrados" value={ars(s.surcharge)} sub="Comisión de QR / tarjetas cobrada al cliente" />}
         <Stat label="Promedio por día" value={ars(d.daily.length ? s.total / d.daily.length : 0)} sub={`${d.daily.length} días con ventas`} />
       </div>
       <Card title="Ventas por día">{d.daily.length ? <SalesBars data={d.daily} x="day" labelFmt={(x) => fmtDate(String(x)).slice(0, 5)} /> : <Empty>Sin ventas.</Empty>}</Card>

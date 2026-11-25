@@ -44,7 +44,7 @@ export function cacheSet(key: string, v: unknown) {
   } catch {}
 }
 
-export type SubmitResult = { queued: true } | { queued: false; number: number; change: number | null; total: number };
+export type SubmitResult = { queued: true } | { queued: false; number: number; change: number | null; total: number; charged?: number };
 
 /** Envía la venta; si no hay conexión la guarda para enviarla después. */
 export async function submitSale(input: Record<string, unknown>, allowOffline: boolean): Promise<SubmitResult> {

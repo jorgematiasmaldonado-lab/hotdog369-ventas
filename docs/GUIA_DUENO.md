@@ -14,6 +14,7 @@ Tu usuario es de **solo lectura**: podés ver todo pero no tenés botones para c
 - **Ventas**: todas las ventas con su detalle, filtros por estado y medio de pago, y las anuladas con su motivo.
 - **Reportes**: días y horarios que más venden (mapa de calor), productos, rendimiento por empleado, arqueos de caja, anulaciones, gastos contra ingresos y fiados. Se exportan a Excel o se imprimen/guardan en PDF.
 - **Turnos**: cada turno con su total y el arqueo: **el efectivo que debería haber, el que contó el empleado y la diferencia** (faltante o sobrante), y lo vendido en cada medio de pago (transferencia, QR, débito, crédito). El empleado nunca ve lo que debería haber.
+- **Recargos**: en el Panel y en Reportes ves los **recargos cobrados** por QR y tarjetas (la comisión que se le cobró al cliente). El porcentaje de cada medio se cambia en *Administración → Catálogos → Medios de pago*.
 - **Avisos de turno**: si un turno no se abre a tiempo te llega una notificación al celular. En *Turnos* ves cuando alguien abrió tarde, a qué hora dice que llegó y el motivo.
 - **Horas**: horas fichadas por empleado, valor hora y **a cobrar** (horas × valor hora), por 1ª quincena, 2ª quincena, quincena anterior o mes.
 - **Fiados**: quién debe, cuánto y desde cuándo.

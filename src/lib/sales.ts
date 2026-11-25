@@ -3,6 +3,8 @@ import { ApiError } from "./api";
 import { audit } from "./audit";
 import type { SessionUser } from "./auth";
 import { applySaleStock, revertSaleStock } from "./stock";
+import { schemaOk } from "./schema";
+import { surchargeFor } from "./surcharge";
 
 export type SaleInput = {
   id: string;
@@ -45,16 +47,24 @@ async function buildLines(tx: Tx, items: SaleInput["items"], payments: SaleInput
   const total = lines.reduce((a, l) => a + l.subtotal, 0);
 
   const pmIds = [...new Set(payments.map((p) => Number(p.payment_method_id)))];
-  const pms = await tx`SELECT id, name, kind FROM payment_methods WHERE id IN ${tx(pmIds)}`;
+  const v2 = await schemaOk();
+  const pms = v2 ? await tx`SELECT id, name, kind, surcharge_pct FROM payment_methods WHERE id IN ${tx(pmIds)}`
+    : await tx`SELECT id, name, kind, 0 AS surcharge_pct FROM payment_methods WHERE id IN ${tx(pmIds)}`;
   const pmMap = new Map(pms.map((p) => [p.id, p]));
   const pays = payments.map((p) => {
     const pm = pmMap.get(Number(p.payment_method_id));
     const amount = Number(p.amount);
     if (!pm) throw new ApiError(400, "Medio de pago inválido.");
     if (!Number.isFinite(amount) || amount <= 0) throw new ApiError(400, "Monto de pago inválido.");
-    return { payment_method_id: pm.id, kind: pm.kind as string, name: pm.name as string, amount };
+    return { payment_method_id: pm.id, kind: pm.kind as string, name: pm.name as string, amount, pct: pm.kind === "fiado" ? 0 : Number(pm.surcharge_pct ?? 0), surcharge: 0 };
   });
-  return { lines, total, pays };
+  return { lines, total, pays, v2 };
+}
+
+/** Recargo de cada pago (se calcula sobre el monto ya ajustado) */
+function applySurcharges(pays: { amount: number; pct: number; surcharge: number }[]) {
+  for (const p of pays) p.surcharge = surchargeFor(p.amount, p.pct);
+  return pays.reduce((a, p) => a + p.surcharge, 0);
 }
 
 async function resolveCustomer(tx: Tx, input: SaleInput) {
@@ -91,7 +101,7 @@ export async function createSale(user: SessionUser, input: SaleInput) {
     }
     if (!shiftId) throw new ApiError(409, "Tenés que abrir el turno antes de vender.");
 
-    const { lines, total, pays } = await buildLines(tx, input.items, input.payments, false);
+    const { lines, total, pays, v2 } = await buildLines(tx, input.items, input.payments, false);
     const paid = pays.reduce((a, p) => a + p.amount, 0);
     let adjustNote: string | null = null;
     if (Math.abs(paid - total) > 0.009) {
@@ -106,11 +116,12 @@ export async function createSale(user: SessionUser, input: SaleInput) {
       }
     }
 
+    const surchargeTotal = applySurcharges(pays);
     const fiado = pays.filter((p) => p.kind === "fiado").reduce((a, p) => a + p.amount, 0);
     const customerId = await resolveCustomer(tx, input);
     if (fiado > 0 && !customerId) throw new ApiError(400, "Para fiar hay que indicar el cliente.");
 
-    const cashPart = pays.filter((p) => p.kind === "efectivo").reduce((a, p) => a + p.amount, 0);
+    const cashPart = pays.filter((p) => p.kind === "efectivo").reduce((a, p) => a + p.amount + p.surcharge, 0);
     let cashReceived: number | null = null;
     let change: number | null = null;
     if (cashPart > 0 && input.cash_received != null && input.cash_received !== ("" as never)) {
@@ -136,15 +147,17 @@ export async function createSale(user: SessionUser, input: SaleInput) {
         VALUES (${sale.id}, ${l.product_id}, ${l.product_name}, ${l.category_name}, ${l.unit_price}, ${l.qty}, ${l.subtotal})`;
     }
     for (const p of pays) {
-      await tx`INSERT INTO sale_payments (sale_id, payment_method_id, amount) VALUES (${sale.id}, ${p.payment_method_id}, ${p.amount})`;
+      if (v2) await tx`INSERT INTO sale_payments (sale_id, payment_method_id, amount, surcharge) VALUES (${sale.id}, ${p.payment_method_id}, ${p.amount}, ${p.surcharge})`;
+      else await tx`INSERT INTO sale_payments (sale_id, payment_method_id, amount) VALUES (${sale.id}, ${p.payment_method_id}, ${p.amount})`;
     }
+    if (v2 && surchargeTotal > 0) await tx`UPDATE sales SET surcharge_total = ${surchargeTotal} WHERE id = ${sale.id}`;
     if (fiado > 0) {
       await tx`INSERT INTO customer_movements (customer_id, sale_id, shift_id, type, amount, user_id, notes, created_at)
         VALUES (${customerId}, ${sale.id}, ${shiftId}, 'cargo', ${fiado}, ${user.id}, ${"Venta #" + sale.number}, ${createdAt})`;
     }
     const low_stock = await applySaleStock(tx, sale.id, lines, -1, "venta", user.id);
     if (adjustNote) await audit(tx, user.id, "ajuste_precio", "venta", sale.id, { pagado: paid }, { total }, adjustNote);
-    return { id: sale.id, number: sale.number, total, change, low_stock };
+    return { id: sale.id, number: sale.number, total, surcharge: surchargeTotal, charged: total + surchargeTotal, change, low_stock };
   });
 }
 
@@ -185,7 +198,7 @@ export async function getSale(saleId: string, db: Tx = sql): Promise<Record<stri
     WHERE s.id = ${saleId}`;
   if (!s) return null;
   const items = await db`SELECT product_id, product_name, category_name, unit_price, qty, subtotal FROM sale_items WHERE sale_id = ${saleId} ORDER BY id`;
-  const payments = await db`SELECT sp.payment_method_id, pm.name, pm.kind, sp.amount FROM sale_payments sp
+  const payments = await db`SELECT sp.payment_method_id, pm.name, pm.kind, sp.amount, ${(await schemaOk()) ? db`sp.surcharge` : db`0::numeric AS surcharge`} FROM sale_payments sp
     JOIN payment_methods pm ON pm.id = sp.payment_method_id WHERE sp.sale_id = ${saleId} ORDER BY sp.id`;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return { ...(s as Record<string, any>), items, payments };
@@ -197,9 +210,10 @@ export async function editSale(user: SessionUser, saleId: string, input: Pick<Sa
     const before = await getSale(saleId, tx);
     if (!before) throw new ApiError(404, "La venta no existe.");
     if (before.status === "anulada") throw new ApiError(409, "No se puede editar una venta anulada.");
-    const { lines, total, pays } = await buildLines(tx, input.items, input.payments, true);
+    const { lines, total, pays, v2 } = await buildLines(tx, input.items, input.payments, true);
     const paid = pays.reduce((a, p) => a + p.amount, 0);
     if (Math.abs(paid - total) > 0.009) throw new ApiError(400, `Los pagos (${paid}) no coinciden con el total (${total}).`);
+    const surchargeTotal = applySurcharges(pays);
     const fiado = pays.filter((p) => p.kind === "fiado").reduce((a, p) => a + p.amount, 0);
     const customerId = input.customer_id ? Number(input.customer_id) : fiado > 0 ? before.customer_id : null;
     if (fiado > 0 && !customerId) throw new ApiError(400, "Para fiar hay que indicar el cliente.");
@@ -211,9 +225,11 @@ export async function editSale(user: SessionUser, saleId: string, input: Pick<Sa
       await tx`INSERT INTO sale_items (sale_id, product_id, product_name, category_name, unit_price, qty, subtotal)
         VALUES (${saleId}, ${l.product_id}, ${l.product_name}, ${l.category_name}, ${l.unit_price}, ${l.qty}, ${l.subtotal})`;
     for (const p of pays)
-      await tx`INSERT INTO sale_payments (sale_id, payment_method_id, amount) VALUES (${saleId}, ${p.payment_method_id}, ${p.amount})`;
+      if (v2) await tx`INSERT INTO sale_payments (sale_id, payment_method_id, amount, surcharge) VALUES (${saleId}, ${p.payment_method_id}, ${p.amount}, ${p.surcharge})`;
+      else await tx`INSERT INTO sale_payments (sale_id, payment_method_id, amount) VALUES (${saleId}, ${p.payment_method_id}, ${p.amount})`;
+    if (v2) await tx`UPDATE sales SET surcharge_total = ${surchargeTotal} WHERE id = ${saleId}`;
     const low_stock = await applySaleStock(tx, saleId, lines, -1, "edicion", user.id);
-    const cashPart = pays.filter((p) => p.kind === "efectivo").reduce((a, p) => a + p.amount, 0);
+    const cashPart = pays.filter((p) => p.kind === "efectivo").reduce((a, p) => a + p.amount + p.surcharge, 0);
     const cashReceived = before.cash_received != null && before.cash_received >= cashPart && cashPart > 0 ? before.cash_received : null;
     await tx`UPDATE sales SET total = ${total}, customer_id = ${customerId}, edited_at = now(), edited_by = ${user.id},
       cash_received = ${cashReceived}, change_given = ${cashReceived != null ? cashReceived - cashPart : null} WHERE id = ${saleId}`;

@@ -65,14 +65,18 @@ export default function VentasPage() {
                       {s.offline && <Badge><WifiOff className="size-3" />Sin conexión</Badge>}
                     </div>
                   </div>
-                  <div className={cx("text-right font-extrabold tabular-nums", s.status === "anulada" && "line-through text-muted")}>{ars(s.total)}</div>
+                  <div className={cx("text-right font-extrabold tabular-nums", s.status === "anulada" && "line-through text-muted")}>{ars(s.total)}
+                    {!!s.surcharge_total && <div className="text-xs font-semibold text-muted">+ recargo {ars(s.surcharge_total)}</div>}</div>
                 </button>
                 {open === s.id && (
                   <div className="mt-3 rounded-xl bg-surface-2 p-3 text-sm">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>{s.items?.map((i, k) => <div key={k} className="flex justify-between"><span>{i.qty}× {i.name}</span><span className="tabular-nums">{ars(i.subtotal)}</span></div>)}</div>
                       <div>
-                        {s.payments?.map((p, k) => <div key={k} className="flex justify-between"><span>{p.name}</span><span className="tabular-nums">{ars(p.amount)}</span></div>)}
+                        {s.payments?.map((p, k) => <div key={k}>
+                          <div className="flex justify-between"><span>{p.name}</span><span className="tabular-nums">{ars(p.amount)}</span></div>
+                          {!!p.surcharge && <div className="flex justify-between text-muted"><span>+ recargo {p.name} (cobrado {ars(p.amount + p.surcharge)})</span><span className="tabular-nums">{ars(p.surcharge)}</span></div>}
+                        </div>)}
                         {s.cash_received != null && <div className="flex justify-between text-muted"><span>Pagó con / vuelto</span><span>{ars(s.cash_received)} / {ars(s.change_given)}</span></div>}
                       </div>
                     </div>

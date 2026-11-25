@@ -8,8 +8,8 @@ export type ShiftSummary = {
   shift: { id: number; status: string; opened_at: string; closed_at: string | null; opening_cash: number; expected_cash: number | null; counted_cash: number | null; difference: number | null; notes: string | null; user_name: string; shift_type_name: string | null;
     opening_pending?: boolean; late_minutes?: number | null; arrived_at?: string | null; late_reason?: string | null; opening_confirmed?: boolean | null; opening_note?: string | null;
     declared?: Record<string, number> | null; expected?: Record<string, number> | null; declared_total?: number | null; expected_total?: number | null };
-  totals: { sales_count: number; sales_total: number; voided_count: number; voided_total: number };
-  byMethod: { id: number; name: string; kind: string; color: string; amount: number }[];
+  totals: { sales_count: number; sales_total: number; voided_count: number; voided_total: number; surcharge_total?: number };
+  byMethod: { id: number; name: string; kind: string; color: string; amount: number; surcharge?: number }[];
   collections: { id: number; name: string; kind: string; amount: number }[];
   cash: { ingresos: number; retiros: number };
   items: { product_name: string; category_name: string | null; qty: number; amount: number }[];
@@ -83,6 +83,7 @@ export function ShiftReport({ s }: { s: ShiftSummary }) {
         </div>
         <div className="space-y-1.5">
           {s.byMethod.map((m) => <Row key={m.id} label={`Ventas en ${m.name}`} value={ars(m.amount)} />)}
+          {!!s.totals.surcharge_total && <Row label="Recargos cobrados (QR / tarjetas)" value={ars(s.totals.surcharge_total)} />}
           {s.collections.map((m) => <Row key={"c" + m.id} label={`Cobros de fiado (${m.name})`} value={ars(m.amount)} />)}
           <Row label="Ventas confirmadas" value={`${s.totals.sales_count}`} />
           <Row label="Anuladas" value={`${s.totals.voided_count} · ${ars(s.totals.voided_total)}`} />
@@ -168,6 +169,7 @@ export function shiftWhatsappText(s: ShiftSummary) {
     ``,
     ...s.byMethod.map((m) => `${m.name}: ${ars(m.amount)}`),
     `*TOTAL DEL TURNO: ${ars(s.totals.sales_total)}* (${s.totals.sales_count} ventas)`,
+    s.totals.surcharge_total ? `Recargos cobrados: ${ars(s.totals.surcharge_total)}` : "",
     s.totals.voided_count ? `Anuladas: ${s.totals.voided_count} (${ars(s.totals.voided_total)})` : "",
     ...whatsArqueo(s),
     ``,

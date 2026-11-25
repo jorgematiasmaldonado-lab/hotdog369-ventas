@@ -1,7 +1,7 @@
 -- =====================================================================
 -- HOT DOG 369 · Actualización: caja inicial del administrador, cierre a ciegas,
 -- control de stock por paquetes (Paty, Alemana y pan), valor hora del personal,
--- horario de cada turno y aviso de apertura tarde.
+-- horario de cada turno, aviso de apertura tarde y recargo por medio de pago (QR, débito, crédito).
 -- Para una base que YA está funcionando (después de 05_actualizacion_avisos.sql).
 -- Cómo usar: Supabase → SQL Editor → New query → pegar TODO → Run.
 -- No borra ventas ni datos. Se puede ejecutar más de una vez.
@@ -71,8 +71,18 @@ INSERT INTO settings (key, value)
   VALUES ('cron_secret', to_jsonb(md5(random()::text || clock_timestamp()::text) || md5(random()::text)))
   ON CONFLICT (key) DO NOTHING;
 
+-- HOT DOG 369 · Recargo por medio de pago (comisión de QR, débito, crédito).
+-- El monto del pago (amount) es la parte del precio; el recargo se guarda aparte.
+-- Idempotente: se puede ejecutar más de una vez.
+ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS surcharge_pct numeric(5,2) NOT NULL DEFAULT 0
+  CHECK (surcharge_pct >= 0 AND surcharge_pct < 50);
+ALTER TABLE sale_payments ADD COLUMN IF NOT EXISTS surcharge numeric(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS surcharge_total numeric(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE customer_movements ADD COLUMN IF NOT EXISTS surcharge numeric(12,2) NOT NULL DEFAULT 0;
+
 INSERT INTO schema_migrations (name) VALUES ('005_caja_horas.sql') ON CONFLICT (name) DO NOTHING;
 INSERT INTO schema_migrations (name) VALUES ('006_horarios.sql') ON CONFLICT (name) DO NOTHING;
+INSERT INTO schema_migrations (name) VALUES ('007_recargos.sql') ON CONFLICT (name) DO NOTHING;
 
 COMMIT;
 

@@ -1,19 +1,23 @@
 import { sql, TZ } from "./db";
 import { addDays, daysBetween, localDate } from "./dates";
+import { schemaOk } from "./schema";
 
 const inRange = (from: string, to: string, col = sql`s.created_at`) =>
   sql`(${col} AT TIME ZONE ${TZ})::date BETWEEN ${from}::date AND ${to}::date`;
 
 async function kpis(from: string, to: string, until?: Date) {
   const cap = until ? sql`AND s.created_at <= ${until}` : sql``;
+  const v2 = await schemaOk();
   const [t] = await sql`
     SELECT count(*) FILTER (WHERE status='confirmada')::int AS count,
            COALESCE(sum(total) FILTER (WHERE status='confirmada'),0) AS total,
            count(*) FILTER (WHERE status='anulada')::int AS voided_count,
-           COALESCE(sum(total) FILTER (WHERE status='anulada'),0) AS voided_total
+           COALESCE(sum(total) FILTER (WHERE status='anulada'),0) AS voided_total,
+           ${v2 ? sql`COALESCE(sum(surcharge_total) FILTER (WHERE status='confirmada'),0)` : sql`0`}::numeric AS surcharge
     FROM sales s WHERE ${inRange(from, to)} ${cap}`;
   const methods = await sql`
-    SELECT pm.id, pm.name, pm.kind, pm.color, COALESCE(sum(sp.amount),0) AS amount, count(DISTINCT s.id)::int AS count
+    SELECT pm.id, pm.name, pm.kind, pm.color, COALESCE(sum(sp.amount),0) AS amount, count(DISTINCT s.id)::int AS count,
+      COALESCE(sum(${v2 ? sql`sp.surcharge` : sql`0`}),0)::numeric AS surcharge
     FROM sale_payments sp JOIN sales s ON s.id = sp.sale_id JOIN payment_methods pm ON pm.id = sp.payment_method_id
     WHERE s.status='confirmada' AND ${inRange(from, to)} ${cap}
     GROUP BY pm.id ORDER BY amount DESC`;

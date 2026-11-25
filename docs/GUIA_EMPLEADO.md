@@ -18,6 +18,8 @@ La primera vez en el día la app te pide **abrir el turno**:
 2. Abajo ves el total. Tocá **COBRAR**.
 3. Tocá el **medio de pago** y listo: la venta queda registrada.
 
+**QR, débito o crédito**: si ese medio tiene recargo, el botón ya muestra cuánto cobrar (ej. *Cobrar $ 8.520*). Al tocarlo aparece el detalle: cobrá ese monto en el posnet o QR y tocá **Cobré … · Confirmar**.
+
 **Efectivo con vuelto**: antes de tocar *Efectivo*, poné con cuánto paga el cliente (o usá los botones rápidos). La app muestra el vuelto en grande.
 
 **Pago mixto** (ej. parte en efectivo y parte por transferencia): pestaña **Pago mixto**, completá cada monto (el botón *Resto* completa lo que falta) y **Confirmar venta**.

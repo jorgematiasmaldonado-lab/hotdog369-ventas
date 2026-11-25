@@ -14,6 +14,7 @@ import { cacheGet, cacheSet, CATALOG_KEY, SHIFT_KEY, submitSale, uuid, useOnline
 import type { Catalog, PaymentMethod, Product, SaleRow } from "@/lib/client/types";
 import { ars, fmtTime } from "@/lib/format";
 import { minutesSinceStart, fmtMinutes, localClock } from "@/lib/dates";
+import { surchargeFor, fmtPct } from "@/lib/surcharge";
 
 type CartLine = { product: Product; qty: number };
 type ShiftInfo = { blind?: boolean; shift: { id: number; opened_at: string; shift_type_name: string | null; opening_cash: number }; totals: { sales_count: number; sales_total?: number } } | null;
@@ -388,23 +389,29 @@ function Checkout({ open, onClose, cart, total, methods, shiftId, allowFiado, al
   const [partial, setPartial] = useState("");
   const [partialMethod, setPartialMethod] = useState<number | "">("");
   const [busy, setBusy] = useState(false);
+  const [confirmM, setConfirmM] = useState<PaymentMethod | null>(null);
 
   useEffect(() => {
     if (open) {
-      setMode("simple"); setReceived(""); setSplit({}); setCustomer(null); setPartial(""); setPartialMethod("");
+      setMode("simple"); setReceived(""); setSplit({}); setCustomer(null); setPartial(""); setPartialMethod(""); setConfirmM(null);
     }
   }, [open]);
+  // Recargo por comisión del medio de pago (se suma a lo que se cobra)
+  const sc = (m: PaymentMethod | undefined, amount: number) => (m ? surchargeFor(amount, m.kind === "fiado" ? 0 : m.surcharge_pct) : 0);
+  const byId = (id: number) => methods.find((m) => m.id === id);
 
   const payable = methods.filter((m) => m.kind !== "fiado");
   const fiadoMethod = methods.find((m) => m.kind === "fiado");
   const cash = methods.find((m) => m.kind === "efectivo");
+  const cashTotal = total + sc(cash, total);
   const receivedN = Number(received || 0);
-  const change = receivedN > 0 ? receivedN - total : null;
+  const change = receivedN > 0 ? receivedN - cashTotal : null;
 
   const send = async (payments: { payment_method_id: number; amount: number }[], extra: Record<string, unknown> = {}) => {
     if (busy) return;
     setBusy(true);
-    const cashAmount = payments.filter((p) => p.payment_method_id === cash?.id).reduce((a, p) => a + p.amount, 0);
+    const cashAmount = payments.filter((p) => p.payment_method_id === cash?.id).reduce((a, p) => a + p.amount + sc(cash, p.amount), 0);
+    const charged = payments.reduce((a, p) => a + p.amount + sc(byId(p.payment_method_id), p.amount), 0);
     const input = {
       id: uuid(),
       shift_id: shiftId,
@@ -415,8 +422,8 @@ function Checkout({ open, onClose, cart, total, methods, shiftId, allowFiado, al
     };
     try {
       const r = await submitSale(input, allowOffline);
-      onDone(r.queued ? { queued: true, total, change: cashAmount > 0 && receivedN >= cashAmount ? receivedN - cashAmount : null }
-        : { queued: false, number: r.number, total: r.total, change: r.change });
+      onDone(r.queued ? { queued: true, total: charged, change: cashAmount > 0 && receivedN >= cashAmount ? receivedN - cashAmount : null }
+        : { queued: false, number: r.number, total: r.charged ?? r.total, change: r.change });
     } catch (e) {
       onError((e as Error).message);
     } finally {
@@ -428,8 +435,10 @@ function Checkout({ open, onClose, cart, total, methods, shiftId, allowFiado, al
   const splitLeft = total - splitSum;
   const partialN = Number(partial || 0);
 
-  const bills = [1000, 2000, 5000, 10000, 20000].filter((b) => b >= total).slice(0, 3);
-  const quick = [...new Set([total, ...bills, Math.ceil(total / 1000) * 1000].filter((v) => v >= total))].sort((a, b) => a - b).slice(0, 4);
+  const bills = [1000, 2000, 5000, 10000, 20000].filter((b) => b >= cashTotal).slice(0, 3);
+  const quick = [...new Set([cashTotal, ...bills, Math.ceil(cashTotal / 1000) * 1000].filter((v) => v >= cashTotal))].sort((a, b) => a - b).slice(0, 4);
+  const splitCharged = Object.entries(split).reduce((a, [id, v]) => a + Number(v || 0) + sc(byId(Number(id)), Number(v || 0)), 0);
+  const splitSurcharge = splitCharged - splitSum;
 
   return (
     <Modal open={open} onClose={onClose} title={<span>Cobrar <span className="text-primary">{ars(total)}</span></span>}>
@@ -441,7 +450,27 @@ function Checkout({ open, onClose, cart, total, methods, shiftId, allowFiado, al
         ))}
       </div>
 
-      {mode === "simple" && (
+      {mode === "simple" && confirmM && (() => {
+        const extra = sc(confirmM, total);
+        return (
+          <div className="space-y-3">
+            <div className="rounded-2xl border-2 p-4" style={{ borderColor: confirmM.color }}>
+              <div className="flex justify-between text-sm"><span className="text-muted">Productos</span><span className="tabular-nums">{ars(total)}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-muted">Recargo {confirmM.name} ({fmtPct(confirmM.surcharge_pct ?? 0)})</span><span className="tabular-nums">+ {ars(extra)}</span></div>
+              <div className="mt-2 border-t border-border pt-2 text-center">
+                <div className="text-sm font-semibold text-muted">Cobrar con {confirmM.name}</div>
+                <div className="text-4xl font-extrabold tabular-nums text-primary">{ars(total + extra)}</div>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="secondary" className="flex-1" onClick={() => setConfirmM(null)}>Volver</Button>
+              <Button className="flex-[2]" size="lg" loading={busy} onClick={() => send([{ payment_method_id: confirmM.id, amount: total }])}>Cobré {ars(total + extra)} · Confirmar</Button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {mode === "simple" && !confirmM && (
         <div className="space-y-4">
           {cash && (
             <div className="rounded-2xl border border-border p-3">
@@ -449,7 +478,7 @@ function Checkout({ open, onClose, cart, total, methods, shiftId, allowFiado, al
               <MoneyInput value={received} onChange={setReceived} />
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {quick.map((v) => (
-                  <button key={v} onClick={() => setReceived(String(v))} className="rounded-lg bg-surface-2 px-3 py-1.5 text-sm font-semibold">{v === total ? "Justo" : ars(v)}</button>
+                  <button key={v} onClick={() => setReceived(String(v))} className="rounded-lg bg-surface-2 px-3 py-1.5 text-sm font-semibold">{v === cashTotal ? "Justo" : ars(v)}</button>
                 ))}
               </div>
               {change != null && (
@@ -462,10 +491,11 @@ function Checkout({ open, onClose, cart, total, methods, shiftId, allowFiado, al
           <div className="grid grid-cols-2 gap-2">
             {payable.map((m) => (
               <button key={m.id} disabled={busy || (m.kind === "efectivo" && change != null && change < 0)}
-                onClick={() => send([{ payment_method_id: m.id, amount: total }])}
-                className="flex h-16 items-center justify-center gap-2 rounded-2xl border-2 px-2 text-center text-base font-bold leading-tight transition active:scale-[0.97] disabled:opacity-40"
+                onClick={() => (m.kind !== "efectivo" && sc(m, total) > 0 ? setConfirmM(m) : send([{ payment_method_id: m.id, amount: total }]))}
+                className="flex h-16 flex-col items-center justify-center rounded-2xl border-2 px-2 text-center text-base font-bold leading-tight transition active:scale-[0.97] disabled:opacity-40"
                 style={{ borderColor: m.color }}>
-                <span className="size-3 shrink-0 rounded-full" style={{ background: m.color }} />{m.name}
+                <span className="flex items-center gap-2"><span className="size-3 shrink-0 rounded-full" style={{ background: m.color }} />{m.name}</span>
+                {sc(m, total) > 0 && <span className="text-xs font-semibold text-muted">Cobrar {ars(total + sc(m, total))}</span>}
               </button>
             ))}
           </div>
@@ -476,12 +506,14 @@ function Checkout({ open, onClose, cart, total, methods, shiftId, allowFiado, al
       {mode === "mixto" && (
         <div className="space-y-2">
           {payable.map((m) => (
-            <div key={m.id} className="flex items-center gap-2">
+            <div key={m.id} className="flex flex-wrap items-center gap-2">
               <span className="flex w-36 items-center gap-2 text-sm font-semibold"><span className="size-3 rounded-full" style={{ background: m.color }} />{m.name}</span>
               <MoneyInput className="flex-1" value={split[m.id] ?? ""} onChange={(v) => setSplit({ ...split, [m.id]: v })} />
               <button className="rounded-lg bg-surface-2 px-2 py-2 text-xs font-semibold" onClick={() => setSplit({ ...split, [m.id]: String(Math.max(0, Number(split[m.id] || 0) + splitLeft)) })}>Resto</button>
+              {sc(m, Number(split[m.id] || 0)) > 0 && <div className="w-full pl-36 text-xs text-muted">+ recargo {ars(sc(m, Number(split[m.id] || 0)))} → cobrar <b className="text-text">{ars(Number(split[m.id]) + sc(m, Number(split[m.id] || 0)))}</b></div>}
             </div>
           ))}
+          {splitSurcharge > 0 && splitLeft === 0 && <div className="text-center text-sm">Total a cobrar con recargos: <b className="text-lg tabular-nums">{ars(splitCharged)}</b></div>}
           <div className={cx("rounded-xl p-3 text-center font-bold", splitLeft === 0 ? "bg-good/10 text-good" : "bg-warn/10 text-warn")}>
             {splitLeft === 0 ? "¡Montos completos!" : splitLeft > 0 ? `Falta asignar ${ars(splitLeft)}` : `Sobran ${ars(-splitLeft)}`}
           </div>
@@ -505,6 +537,9 @@ function Checkout({ open, onClose, cart, total, methods, shiftId, allowFiado, al
               </Select>
             </div>
           </div>
+          {partialN > 0 && partialMethod && sc(byId(Number(partialMethod)), partialN) > 0 && (
+            <div className="text-center text-sm">Cobrar ahora: <b>{ars(partialN + sc(byId(Number(partialMethod)), partialN))}</b> <span className="text-muted">(incluye recargo {ars(sc(byId(Number(partialMethod)), partialN))})</span></div>
+          )}
           <div className="rounded-xl bg-accent/25 p-3 text-center font-bold">Queda debiendo: {ars(Math.max(0, total - partialN))}</div>
           <Button size="lg" className="w-full" loading={busy}
             disabled={!customer || partialN >= total || (partialN > 0 && !partialMethod)}

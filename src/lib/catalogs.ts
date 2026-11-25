@@ -2,7 +2,7 @@
 // Para sumar un catálogo nuevo: crear la tabla en una migración y agregar su entrada aquí.
 import { ApiError, str, num, bool, color } from "./api";
 
-type FieldType = "text" | "int" | "money" | "color" | "bool" | "select" | "time" | "days";
+type FieldType = "text" | "int" | "money" | "color" | "bool" | "select" | "time" | "days" | "percent";
 export type FieldDef = { type: FieldType; label: string; required?: boolean; options?: string[]; ref?: string; hint?: string; v2?: boolean };
 export type CatalogDef = { table: string; label: string; order: string; fields: Record<string, FieldDef> };
 
@@ -33,6 +33,7 @@ export const CATALOGS: Record<string, CatalogDef> = {
     fields: {
       name: { type: "text", label: "Nombre", required: true },
       kind: { type: "select", label: "Tipo", required: true, options: ["efectivo", "transferencia", "otro", "fiado"] },
+      surcharge_pct: { type: "percent", label: "Recargo por comisión (%)", hint: "Lo que cobra la app o el posnet (ej. 6). Al cobrar con este medio se suma para que al local le quede el precio completo. 0 = sin recargo.", v2: true },
       color: { type: "color", label: "Color" },
       sort: { type: "int", label: "Orden" },
       active: { type: "bool", label: "Activo" },
@@ -83,6 +84,12 @@ export function parseCatalog(def: CatalogDef, b: Record<string, unknown>, partia
       case "int": out[k] = num(v ?? 0, f.label, { int: true }); break;
       case "money": out[k] = num(v, f.label, { required: !!f.required, min: 0 }); break;
       case "color": out[k] = color(v, f.label); break;
+      case "percent": {
+        const n = v === undefined || v === null || v === "" ? 0 : Number(String(v).replace(",", "."));
+        if (!Number.isFinite(n) || n < 0 || n >= 50) throw new ApiError(400, `"${f.label}" tiene que estar entre 0 y 49,99`);
+        out[k] = b.kind === "fiado" ? 0 : Math.round(n * 100) / 100;
+        break;
+      }
       case "time":
         if (v === undefined || v === null || v === "") out[k] = null;
         else if (typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d(:00)?$/.test(v)) out[k] = v.slice(0, 5);
