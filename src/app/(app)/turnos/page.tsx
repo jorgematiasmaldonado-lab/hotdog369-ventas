@@ -42,12 +42,12 @@ export default function TurnosPage() {
               <div className="mt-2 flex items-end justify-between">
                 <div><div className="text-xs text-muted">{s.sales_count} ventas</div><div className="text-2xl font-extrabold tabular-nums">{ars(s.sales_total)}</div></div>
                 {(() => {
-                  // Diferencia total (todos los medios) si hay arqueo por medio; si no, la de efectivo
-                  const d = s.declared_total != null && s.expected_total != null ? Math.round((s.declared_total - s.expected_total) * 100) / 100 : s.difference;
+                  // Resultado del arqueo de efectivo (lo que contó el empleado contra lo que debería haber)
+                  const d = s.difference == null ? null : Number(s.difference);
                   return d != null && (
                     <div className={cx("text-right text-sm font-bold", d < 0 ? "text-bad" : d > 0 ? "text-warn" : "text-good")}>
                       {d === 0 ? "Caja OK" : `${d > 0 ? "Sobrante" : "Faltante"} ${ars(Math.abs(d))}`}
-                      {s.declared_total != null && <div className="text-xs font-normal text-muted">Declaró {ars(s.declared_total)}</div>}
+                      {s.counted_cash != null && <div className="text-xs font-normal text-muted">Efectivo contado {ars(s.counted_cash)}</div>}
                     </div>
                   );
                 })()}

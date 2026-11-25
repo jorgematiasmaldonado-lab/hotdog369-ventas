@@ -20,24 +20,26 @@ export type ShiftSummary = {
   methods?: { id: number; name: string; kind: string }[];
 };
 
-export type ArqueoLine = { id: number; name: string; expected: number; declared: number | null; diff: number | null };
+export type ArqueoLine = { id: number; name: string; kind: string; expected: number; declared: number | null; diff: number | null };
 
-/** Arqueo por medio de pago: lo que debería haber, lo declarado por el empleado y la diferencia */
-export function arqueo(s: ShiftSummary): { lines: ArqueoLine[]; expected: number; declared: number | null; diff: number | null } | null {
+/** Arqueo por medio de pago: lo que debería haber, lo declarado (si lo informó) y la diferencia */
+export function arqueo(s: ShiftSummary): { lines: ArqueoLine[]; expected: number; declared: number | null; diff: number | null; complete: boolean } | null {
   const sh = s.shift;
   const live = s.expected ?? [];
   const exp = sh.status === "cerrado" && sh.expected ? sh.expected : Object.fromEntries(live.map((m) => [m.id, m.amount]));
-  const names = new Map((s.methods ?? live).map((m) => [String(m.id), m.name]));
+  const info = new Map((s.methods ?? live).map((m) => [String(m.id), m]));
   const ids = [...new Set([...Object.keys(exp), ...Object.keys(sh.declared ?? {})])];
   if (!ids.length) return null;
+  const dec = sh.declared ?? null;
   const lines = ids.map((k) => {
     const e = Number(exp[k] ?? 0);
-    const d = sh.declared ? Number(sh.declared[k] ?? 0) : null;
-    return { id: Number(k), name: names.get(k) ?? `Medio ${k}`, expected: e, declared: d, diff: d == null ? null : Math.round((d - e) * 100) / 100 };
-  });
+    const d = dec && dec[k] !== undefined && dec[k] !== null ? Number(dec[k]) : null;
+    return { id: Number(k), name: info.get(k)?.name ?? `Medio ${k}`, kind: info.get(k)?.kind ?? "otro", expected: e, declared: d, diff: d == null ? null : Math.round((d - e) * 100) / 100 };
+  }).sort((x, y) => (x.kind === "efectivo" ? -1 : 0) - (y.kind === "efectivo" ? -1 : 0));
   const expected = sh.status === "cerrado" && sh.expected_total != null ? Number(sh.expected_total) : lines.reduce((a, l) => a + l.expected, 0);
-  const declared = sh.declared ? (sh.declared_total != null ? Number(sh.declared_total) : lines.reduce((a, l) => a + (l.declared ?? 0), 0)) : null;
-  return { lines, expected, declared, diff: declared == null ? null : Math.round((declared - expected) * 100) / 100 };
+  const complete = !!dec && lines.every((l) => l.declared != null);
+  const declared = complete ? lines.reduce((a, l) => a + (l.declared ?? 0), 0) : null;
+  return { lines, expected, declared, diff: declared == null ? null : Math.round((declared - expected) * 100) / 100, complete };
 }
 
 export const diffText = (d: number) => (d === 0 ? "Sin diferencia" : `${d > 0 ? "Sobrante" : "Faltante"} ${ars(Math.abs(d))}`);
@@ -105,19 +107,19 @@ export function ShiftReport({ s }: { s: ShiftSummary }) {
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[420px]">
             <thead><tr className="border-b-2 border-brand-red text-left">
-              <th className="py-1 uppercase">Arqueo</th><th className="text-right">Debería haber</th><th className="text-right">Declaró</th><th className="text-right">Diferencia</th>
+              <th className="py-1 uppercase">Arqueo</th><th className="text-right">Debería haber</th><th className="text-right">Contó / informó</th><th className="text-right">Diferencia</th>
             </tr></thead>
             <tbody>
               {aq.lines.map((l) => (
-                <tr key={l.id} className="border-b border-border">
-                  <td className="py-1">{l.name}</td>
+                <tr key={l.id} className={cx("border-b border-border", l.kind === "efectivo" && "font-bold")}>
+                  <td className="py-1">{l.kind === "efectivo" ? `${l.name} en caja` : `Ventas en ${l.name}`}</td>
                   <td className="text-right tabular-nums">{ars(l.expected)}</td>
-                  <td className="text-right tabular-nums">{l.declared == null ? "—" : ars(l.declared)}</td>
+                  <td className="text-right tabular-nums">{l.declared == null ? <span className="font-normal text-muted">{sh.declared ? "no informó" : "—"}</span> : ars(l.declared)}</td>
                   <td className={cx("text-right font-semibold tabular-nums", l.diff != null && diffTone(l.diff))}>{l.diff == null ? "—" : diffText(l.diff)}</td>
                 </tr>
               ))}
               <tr className="font-bold">
-                <td className="py-1.5">Total</td>
+                <td className="py-1.5">Total (todos los medios)</td>
                 <td className="text-right tabular-nums">{ars(aq.expected)}</td>
                 <td className="text-right tabular-nums">{aq.declared == null ? "—" : ars(aq.declared)}</td>
                 <td className={cx("text-right tabular-nums", aq.diff != null && diffTone(aq.diff))}>{aq.diff == null ? "—" : diffText(aq.diff)}</td>
@@ -172,6 +174,7 @@ function whatsArqueo(s: ShiftSummary) {
   const sh = s.shift;
   if (!sh.declared) return [sh.difference != null ? `Arqueo: esperado ${ars(sh.expected_cash)} · contado ${ars(sh.counted_cash)} · diferencia ${ars(sh.difference)}` : ""];
   const aq = arqueo(s)!;
-  return ["", "*Arqueo (debería / declaró)*", ...aq.lines.map((l) => `${l.name}: ${ars(l.expected)} / ${ars(l.declared ?? 0)}${l.diff ? ` (${diffText(l.diff)})` : ""}`),
-    `*Total: ${ars(aq.expected)} / ${ars(aq.declared ?? 0)} → ${diffText(aq.diff ?? 0)}*`, sh.opening_pending ? "⚠ Caja inicial pendiente" : ""];
+  return ["", "*Arqueo (debería / contó)*",
+    ...aq.lines.map((l) => `${l.kind === "efectivo" ? `*${l.name} en caja*` : l.name}: ${ars(l.expected)} / ${l.declared == null ? "no informó" : ars(l.declared)}${l.diff ? ` (${diffText(l.diff)})` : ""}`),
+    sh.difference != null ? `*Caja en efectivo: ${diffText(Number(sh.difference))}*` : "", sh.opening_pending ? "⚠ Caja inicial pendiente" : ""];
 }

@@ -21,15 +21,21 @@ export const POST = route(async (req, { params }) => {
     if (s.user_id !== user.id && !can(user, "ventas.editar")) throw new ApiError(403, "Solo podés cerrar tu propio turno.");
     const sum = (await shiftSummary(shiftId, tx))!;
 
-    // Lo declarado: { <id medio de pago>: monto }. Compatibilidad: "counted_cash" = solo efectivo.
+    // Lo declarado: { <id medio de pago>: monto }. El efectivo es obligatorio; los demás medios son opcionales
+    // (si no se informan, no figuran y no cuentan como faltante). Compatibilidad: "counted_cash" = efectivo.
     const declared: Record<string, number> = {};
-    const raw = (b.declared && typeof b.declared === "object" ? b.declared : {}) as Record<string, unknown>;
-    for (const m of sum.expected) declared[m.id] = num(raw[m.id] ?? 0, `monto de ${m.name}`, { min: 0 })!;
-    if (!b.declared && b.counted_cash !== undefined) {
-      const cashId = sum.expected.find((m) => m.kind === "efectivo")?.id;
-      if (cashId) declared[cashId] = num(b.counted_cash, "efectivo contado", { min: 0 })!;
+    const raw = { ...(b.declared && typeof b.declared === "object" ? b.declared : {}) } as Record<string, unknown>;
+    const cashIds = sum.expected.filter((m) => m.kind === "efectivo").map((m) => m.id);
+    if (b.counted_cash !== undefined && cashIds[0] && (raw[cashIds[0]] === undefined || raw[cashIds[0]] === "")) raw[cashIds[0]] = b.counted_cash;
+    for (const m of sum.expected) {
+      const v = raw[m.id];
+      if (v === undefined || v === null || v === "") {
+        if (m.kind === "efectivo") throw new ApiError(400, `Falta el monto de ${m.name} en caja.`);
+        continue;
+      }
+      declared[m.id] = num(v, `monto de ${m.name}`, { min: 0 })!;
     }
-    const counted = sum.expected.filter((m) => m.kind === "efectivo").reduce((a, m) => a + declared[m.id], 0);
+    const counted = cashIds.reduce((a, id) => a + (declared[id] ?? 0), 0);
     const declaredTotal = Object.values(declared).reduce((a, v) => a + v, 0);
     const diff = counted - sum.expected_cash;
 

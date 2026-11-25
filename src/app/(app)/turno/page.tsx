@@ -59,15 +59,19 @@ export default function TurnoPage() {
   const methods = (blind ? s.methods : s.methods ?? s.expected ?? []).filter((m) => m.kind !== "fiado");
   const expectedOf = (id: number) => (blind ? null : s.expected?.find((m) => m.id === id)?.amount ?? 0);
   const n = (id: number) => Number(vals[id] || 0);
-  const total = methods.reduce((a, m) => a + n(m.id), 0);
-  const filled = methods.length > 0 && methods.every((m) => vals[m.id] !== undefined && vals[m.id] !== "");
-  const fullDiff = blind ? null : total - (s.expected_total ?? 0);
+  const given = (id: number) => vals[id] !== undefined && vals[id] !== "";
+  const cashMethods = methods.filter((m) => m.kind === "efectivo");
+  const otherMethods = methods.filter((m) => m.kind !== "efectivo");
+  const cash = cashMethods.reduce((a, m) => a + n(m.id), 0);
+  // Solo el efectivo es obligatorio
+  const filled = cashMethods.length > 0 && cashMethods.every((m) => given(m.id));
+  const fullDiff = blind ? null : cash - (s.expected_cash ?? 0);
 
   const close = async () => {
     setClosing(true);
     try {
       await api(`/api/shifts/${s.shift.id}/close`, {
-        body: { declared: Object.fromEntries(methods.map((m) => [m.id, n(m.id)])), notes, clock_out: !!data.hours?.clocked_in && clockOut },
+        body: { declared: Object.fromEntries(methods.filter((m) => given(m.id)).map((m) => [m.id, n(m.id)])), notes, clock_out: !!data.hours?.clocked_in && clockOut },
       });
       toast("Turno cerrado");
       if (blind) { setConfirm(false); setClosed(true); } else router.push(`/turnos/${s.shift.id}`);
@@ -92,33 +96,43 @@ export default function TurnoPage() {
         {blind ? <BlindInfo s={s} /> : <ShiftReport s={s} />}
         <Card title="Cerrar turno · arqueo de caja">
           <div className="space-y-3">
-            <p className="text-sm text-muted">Contá y anotá cuánto hay en cada medio de pago. Si en alguno no hubo nada, poné 0.</p>
-            {methods.map((m) => (
-              <Field key={m.id} label={m.kind === "efectivo" ? `${m.name} en caja` : m.name} hint={hint(m)}>
-                <MoneyInput value={vals[m.id] ?? ""} onChange={(v) => setVals({ ...vals, [m.id]: v })} />
+            <p className="text-sm text-muted">Contá todo el efectivo que hay en la caja (incluida la caja inicial) y anotalo.</p>
+            {cashMethods.map((m) => (
+              <Field key={m.id} label={`${m.name} en caja`}>
+                <MoneyInput value={vals[m.id] ?? ""} onChange={(v) => setVals({ ...vals, [m.id]: v })} className="[&_input]:h-14 [&_input]:text-xl [&_input]:font-bold" />
                 {!blind && <span className="mt-1 block text-xs text-muted">Debería haber: <b className="tabular-nums">{ars(expectedOf(m.id) ?? 0)}</b></span>}
               </Field>
             ))}
-            <div className="rounded-xl bg-surface-2 p-3">
-              <div className="text-sm text-muted">Total declarado</div>
-              <div className="text-3xl font-extrabold tabular-nums">{ars(total)}</div>
-            </div>
             {fullDiff != null && filled && (
               <div className={cx("rounded-xl p-3 text-center text-lg font-bold", fullDiff === 0 ? "bg-good/10 text-good" : fullDiff > 0 ? "bg-warn/10 text-warn" : "bg-bad/10 text-bad")}>
                 {fullDiff === 0 ? "Caja perfecta, sin diferencia" : fullDiff > 0 ? `Sobrante: ${ars(fullDiff)}` : `Faltante: ${ars(-fullDiff)}`}
               </div>
             )}
+            {otherMethods.length > 0 && (
+              <details className="rounded-xl border border-border p-3">
+                <summary className="cursor-pointer text-sm font-semibold">Otros medios de pago <span className="font-normal text-muted">(opcional)</span></summary>
+                <p className="mt-1 text-xs text-muted">Completá solo si sabés el monto. Si no, dejalo vacío.</p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {otherMethods.map((m) => (
+                    <Field key={m.id} label={m.name}>
+                      <MoneyInput value={vals[m.id] ?? ""} placeholder="opcional" onChange={(v) => setVals({ ...vals, [m.id]: v })} />
+                      {!blind && <span className="mt-1 block text-xs text-muted">Debería: <b className="tabular-nums">{ars(expectedOf(m.id) ?? 0)}</b></span>}
+                    </Field>
+                  ))}
+                </div>
+              </details>
+            )}
             <Field label="Observaciones (opcional)"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} /></Field>
             {data.hours?.clocked_in && (
               <label className="flex items-center justify-between rounded-xl bg-surface-2 px-3 py-3 font-semibold">Fichar mi salida al cerrar<input type="checkbox" className="size-5" checked={clockOut} onChange={(e) => setClockOut(e.target.checked)} /></label>
             )}
-            <Button size="lg" className="w-full" disabled={!filled} onClick={() => setConfirm(true)}>{filled ? "Cerrar turno" : "Completá todos los montos"}</Button>
+            <Button size="lg" className="w-full" disabled={!filled} onClick={() => setConfirm(true)}>{filled ? "Cerrar turno" : "Anotá el efectivo en caja"}</Button>
           </div>
         </Card>
       </div>
       <Modal open={confirm} onClose={() => setConfirm(false)} title="¿Cerrar el turno?"
         footer={<div className="flex gap-2"><Button variant="secondary" className="flex-1" onClick={() => setConfirm(false)}>Volver</Button><Button className="flex-1" loading={closing} onClick={close}>Sí, cerrar</Button></div>}>
-        <p>Vas a declarar un total de <b>{ars(total)}</b>. Después de cerrar no vas a poder cargar más ventas en este turno{blind ? " ni cambiar los montos" : ""}.</p>
+        <p>Vas a declarar <b>{ars(cash)}</b> en efectivo. Después de cerrar no vas a poder cargar más ventas en este turno{blind ? " ni cambiar los montos" : ""}.</p>
       </Modal>
       <CashMovementModal type={mov} onClose={() => setMov(null)} onDone={() => mutate()} />
     </div>

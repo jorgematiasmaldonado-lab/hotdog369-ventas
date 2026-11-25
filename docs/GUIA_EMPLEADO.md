@@ -33,7 +33,8 @@ Si se corta la conexión aparece el aviso **Sin conexión**. Podés seguir vendi
 
 ## 6. Cerrar el turno
 1. Menú **Mi turno**.
-2. Completá **cada medio de pago**: el efectivo que hay en la caja (incluida la caja inicial), lo recibido por transferencia, Mercado Pago / QR, débito y crédito. Si en alguno no hubo nada, poné 0. La app suma el **total declarado**.
+2. Contá **todo el efectivo que hay en la caja** (incluida la caja inicial) y anotalo: es obligatorio.
+   Transferencia, Mercado Pago / QR, débito y crédito son **opcionales**: completalos solo si sabés el monto.
 3. **Cerrar turno**. El administrador revisa después si el arqueo coincide.
 
 ## 7. Mis horas

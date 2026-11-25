@@ -86,7 +86,7 @@ quedan ocultas (lo demás sigue funcionando).
 - `04_actualizacion_stock_horas.sql`: stock, control de stock, horas del personal y respaldos.
 - `05_actualizacion_avisos.sql`: avisos de stock bajo en el celular.
 - `06_actualizacion_caja_horas.sql`: caja inicial que carga el administrador, cierre de turno a ciegas
-  (el empleado declara por medio de pago sin ver lo esperado), control de stock por paquetes y sueltas
+  (el empleado cuenta el efectivo sin ver lo esperado; los demás medios son opcionales), control de stock por paquetes y sueltas
   (Salchicha Paty, Salchicha Alemana y Pan de pancho) y valor hora del personal con quincenas.
 
 ### Respaldo y restauración
