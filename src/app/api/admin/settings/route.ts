@@ -9,6 +9,8 @@ const ALLOWED: Record<string, (v: unknown) => boolean> = {
   ticket_footer: (v) => typeof v === "string" && v.length <= 200,
   stock_control_on_open: (v) => v === "obligatorio" || v === "opcional" || v === "no",
   backup_reminder_days: (v) => Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 30,
+  late_tolerance_min: (v) => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 180,
+  unopened_alert_min: (v) => Number.isInteger(v) && (v as number) >= 5 && (v as number) <= 240,
 };
 
 export const PUT = route(async (req) => {

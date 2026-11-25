@@ -8,9 +8,10 @@ import { Badge, Button, Card, Empty, Loading, PageTitle, cx } from "@/components
 import { NextOpeningCard, OpeningModal } from "@/components/opening-cash";
 import { RangePicker, type Range } from "@/components/range-picker";
 import { fetcher, qs } from "@/lib/client/fetcher";
-import { ars, fmtDateTime } from "@/lib/format";
+import { ars, fmtDateTime, fmtTime } from "@/lib/format";
+import { fmtMinutes } from "@/lib/dates";
 
-type Row = { id: number; status: string; opened_at: string; closed_at: string | null; opening_cash: number; opening_pending?: boolean; declared_total?: number | null; expected_total?: number | null; expected_cash: number | null; counted_cash: number | null; difference: number | null; user_name: string; shift_type_name: string | null; sales_total: number; sales_count: number };
+type Row = { id: number; status: string; opened_at: string; closed_at: string | null; opening_cash: number; opening_pending?: boolean; late_minutes?: number | null; arrived_at?: string | null; late_reason?: string | null; declared_total?: number | null; expected_total?: number | null; expected_cash: number | null; counted_cash: number | null; difference: number | null; user_name: string; shift_type_name: string | null; sales_total: number; sales_count: number };
 
 export default function TurnosPage() {
   const { can } = useMe();
@@ -33,6 +34,11 @@ export default function TurnosPage() {
                 <Badge tone={s.status === "abierto" ? "good" : "neutral"}>{s.status === "abierto" ? "Abierto" : "Cerrado"}</Badge>
               </div>
               <div className="text-xs text-muted">{fmtDateTime(s.opened_at)}{s.closed_at && ` → ${fmtDateTime(s.closed_at)}`}</div>
+              {!!s.late_minutes && (
+                <div className="mt-2 rounded-lg bg-bad/10 px-2 py-1.5 text-xs text-bad">
+                  <b>Abrió {fmtMinutes(s.late_minutes)} tarde</b>{s.arrived_at && ` · dice que llegó ${fmtTime(s.arrived_at)}`}{s.late_reason && ` · ${s.late_reason}`}
+                </div>
+              )}
               {s.opening_pending && (
                 <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-warn/10 px-2 py-1.5 text-xs font-semibold text-warn">
                   Caja inicial pendiente

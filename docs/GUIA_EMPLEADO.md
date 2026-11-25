@@ -10,7 +10,8 @@ La primera vez en el día la app te pide **abrir el turno**:
 2. Elegí el turno (Mañana / Tarde / Noche).
 3. Vas a ver el **efectivo inicial** que cargó el administrador (no se puede cambiar). Contá la caja y marcá **Conté la caja y está bien**; si no coincide, escribí qué encontraste.
    Si dice *Caja inicial pendiente*, abrí igual: el administrador la completa después.
-4. Tocá **Abrir turno**.
+4. Si abrís el turno **después del horario**, la app te pide **a qué hora llegaste** y **por qué abriste tarde** (lo ve el administrador). Tus horas se cuentan desde que fichás: abrí la app apenas llegás.
+5. Tocá **Abrir turno**.
 
 ## 3. Cargar una venta
 1. Tocá el producto (cada toque suma 1; el número amarillo indica cuántos llevás). Cambiá entre **Panchería** y **Cafetería** arriba, o usá **Buscar**.

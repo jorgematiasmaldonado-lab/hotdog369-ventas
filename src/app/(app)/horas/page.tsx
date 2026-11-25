@@ -77,6 +77,7 @@ function MyAttendance() {
             <Stat tone="accent" label="Llevo ganado" value={ars(data.quincena.amount)} sub={`Valor hora ${ars(data.hourly_rate)}`} />
           )}
         </div>
+        <p className="mt-2 text-center text-xs text-muted">Las horas se cuentan desde que fichás la entrada: fichá apenas llegás.</p>
         {data.quincena && data.hourly_rate == null && <p className="mt-2 text-center text-xs text-muted">Tu valor hora todavía no está cargado.</p>}
       </Card>
       <Card title="Mis últimas fichadas">

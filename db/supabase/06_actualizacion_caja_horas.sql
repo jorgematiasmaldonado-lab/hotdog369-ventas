@@ -1,6 +1,7 @@
 -- =====================================================================
 -- HOT DOG 369 · Actualización: caja inicial del administrador, cierre a ciegas,
--- control de stock por paquetes (Paty, Alemana y pan) y valor hora del personal.
+-- control de stock por paquetes (Paty, Alemana y pan), valor hora del personal,
+-- horario de cada turno y aviso de apertura tarde.
 -- Para una base que YA está funcionando (después de 05_actualizacion_avisos.sql).
 -- Cómo usar: Supabase → SQL Editor → New query → pegar TODO → Run.
 -- No borra ventas ni datos. Se puede ejecutar más de una vez.
@@ -42,7 +43,36 @@ ALTER TABLE shifts ADD COLUMN IF NOT EXISTS expected_total numeric(12,2);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS hourly_rate numeric(12,2) CHECK (hourly_rate IS NULL OR hourly_rate >= 0);
 ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS hourly_rate numeric(12,2);                  -- valor vigente al fichar
 
+-- HOT DOG 369 · Horario de cada turno, aviso de apertura tarde y aviso de turno sin abrir.
+-- Idempotente: se puede ejecutar más de una vez.
+
+-- Horario de inicio y días en que se abre cada turno (0 = domingo … 6 = sábado)
+ALTER TABLE shift_types ADD COLUMN IF NOT EXISTS start_time time;
+ALTER TABLE shift_types ADD COLUMN IF NOT EXISTS days text NOT NULL DEFAULT '0123456';
+
+-- Apertura tarde: minutos de demora, hora en que dijo haber llegado y motivo
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS late_minutes int;
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS arrived_at timestamptz;
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS late_reason text;
+
+-- Avisos de "turno sin abrir" ya enviados (uno por turno y día)
+CREATE TABLE IF NOT EXISTS shift_alerts (
+  shift_type_id int NOT NULL REFERENCES shift_types(id) ON DELETE CASCADE,
+  day           date NOT NULL,
+  sent_at       timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (shift_type_id, day)
+);
+ALTER TABLE shift_alerts ENABLE ROW LEVEL SECURITY;
+
+-- Configuración: tolerancia para abrir tarde, minutos para avisar y clave del control automático
+INSERT INTO settings (key, value) VALUES ('late_tolerance_min', '15') ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('unopened_alert_min', '30') ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value)
+  VALUES ('cron_secret', to_jsonb(md5(random()::text || clock_timestamp()::text) || md5(random()::text)))
+  ON CONFLICT (key) DO NOTHING;
+
 INSERT INTO schema_migrations (name) VALUES ('005_caja_horas.sql') ON CONFLICT (name) DO NOTHING;
+INSERT INTO schema_migrations (name) VALUES ('006_horarios.sql') ON CONFLICT (name) DO NOTHING;
 
 COMMIT;
 

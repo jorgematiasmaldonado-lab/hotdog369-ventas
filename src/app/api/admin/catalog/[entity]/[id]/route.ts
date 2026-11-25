@@ -2,12 +2,13 @@ import { sql } from "@/lib/db";
 import { route, body, id, ApiError } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
+import { schemaOk } from "@/lib/schema";
 import { getCatalog, parseCatalog } from "@/lib/catalogs";
 
 export const PUT = route(async (req, { params }) => {
   const user = await requireUser("productos.gestionar");
   const p = await params;
-  const def = getCatalog(p.entity);
+  const def = getCatalog(p.entity, await schemaOk());
   const rid = id(p);
   const data = parseCatalog(def, await body(req), true);
   if (!Object.keys(data).length) throw new ApiError(400, "No hay cambios.");
@@ -26,7 +27,7 @@ export const PUT = route(async (req, { params }) => {
 export const DELETE = route(async (_req, { params }) => {
   const user = await requireUser("productos.gestionar");
   const p = await params;
-  const def = getCatalog(p.entity);
+  const def = getCatalog(p.entity, await schemaOk());
   const rid = id(p);
   const [before] = await sql`SELECT * FROM ${sql(def.table)} WHERE id = ${rid}`;
   if (!before) throw new ApiError(404, "No existe.");

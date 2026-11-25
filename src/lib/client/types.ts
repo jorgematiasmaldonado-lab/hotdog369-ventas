@@ -15,7 +15,7 @@ export type Catalog = {
   products: Product[];
   paymentMethods: PaymentMethod[];
   voidReasons: { id: number; label: string }[];
-  shiftTypes: { id: number; name: string }[];
+  shiftTypes: { id: number; name: string; start_time?: string | null; days?: string }[];
   at: string;
 };
 export type Customer = { id: number; name: string; phone: string | null; notes: string | null; balance: number; first_debt_at: string | null; last_movement_at: string | null };

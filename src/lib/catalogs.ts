@@ -2,8 +2,8 @@
 // Para sumar un catálogo nuevo: crear la tabla en una migración y agregar su entrada aquí.
 import { ApiError, str, num, bool, color } from "./api";
 
-type FieldType = "text" | "int" | "money" | "color" | "bool" | "select";
-export type FieldDef = { type: FieldType; label: string; required?: boolean; options?: string[]; ref?: string };
+type FieldType = "text" | "int" | "money" | "color" | "bool" | "select" | "time" | "days";
+export type FieldDef = { type: FieldType; label: string; required?: boolean; options?: string[]; ref?: string; hint?: string; v2?: boolean };
 export type CatalogDef = { table: string; label: string; order: string; fields: Record<string, FieldDef> };
 
 export const CATALOGS: Record<string, CatalogDef> = {
@@ -42,6 +42,8 @@ export const CATALOGS: Record<string, CatalogDef> = {
     table: "shift_types", label: "Turnos", order: "sort, name",
     fields: {
       name: { type: "text", label: "Nombre", required: true },
+      start_time: { type: "time", label: "Hora de inicio", hint: "Si abren más tarde, la app pide el motivo y avisa al dueño y al administrador.", v2: true },
+      days: { type: "days", label: "Días que se abre", v2: true },
       sort: { type: "int", label: "Orden" },
       active: { type: "bool", label: "Activo" },
     },
@@ -64,10 +66,11 @@ export const CATALOGS: Record<string, CatalogDef> = {
   },
 };
 
-export function getCatalog(entity: string) {
+export function getCatalog(entity: string, v2 = true): CatalogDef {
   const def = CATALOGS[entity];
   if (!def) throw new ApiError(404, "Catálogo inexistente.");
-  return def;
+  // Los campos nuevos solo existen si la base está actualizada
+  return v2 ? def : { ...def, fields: Object.fromEntries(Object.entries(def.fields).filter(([, f]) => !f.v2)) };
 }
 
 export function parseCatalog(def: CatalogDef, b: Record<string, unknown>, partial = false) {
@@ -80,6 +83,17 @@ export function parseCatalog(def: CatalogDef, b: Record<string, unknown>, partia
       case "int": out[k] = num(v ?? 0, f.label, { int: true }); break;
       case "money": out[k] = num(v, f.label, { required: !!f.required, min: 0 }); break;
       case "color": out[k] = color(v, f.label); break;
+      case "time":
+        if (v === undefined || v === null || v === "") out[k] = null;
+        else if (typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d(:00)?$/.test(v)) out[k] = v.slice(0, 5);
+        else throw new ApiError(400, `"${f.label}" no es una hora válida`);
+        break;
+      case "days": {
+        const d = typeof v === "string" ? [...new Set(v.replace(/[^0-6]/g, "").split(""))].sort().join("") : "0123456";
+        if (!d) throw new ApiError(400, "Elegí al menos un día.");
+        out[k] = d;
+        break;
+      }
       case "bool": out[k] = bool(v, k === "active"); break;
       case "select":
         if (f.options) {

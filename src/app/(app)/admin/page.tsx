@@ -211,7 +211,10 @@ function Modules() {
 function Config() {
   const { me, reload } = useMe();
   const [f, setF] = useState({ business_name: String(me?.settings.business_name ?? "HOT DOG 369"), fiado_alert_days: Number(me?.settings.fiado_alert_days ?? 15), ticket_footer: String(me?.settings.ticket_footer ?? ""),
-    stock_control_on_open: String(me?.settings.stock_control_on_open ?? "obligatorio"), backup_reminder_days: Number(me?.settings.backup_reminder_days ?? 3) });
+    stock_control_on_open: String(me?.settings.stock_control_on_open ?? "obligatorio"), backup_reminder_days: Number(me?.settings.backup_reminder_days ?? 3),
+    ...(me?.schema_ok ? { late_tolerance_min: Number(me?.settings.late_tolerance_min ?? 15), unopened_alert_min: Number(me?.settings.unopened_alert_min ?? 30) } : {}) });
+  const lastRun = me?.settings.cron_last_run ? new Date(String(me.settings.cron_last_run)) : null;
+  const cronOk = !!lastRun && Date.now() - lastRun.getTime() < 30 * 60000;
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   return (
@@ -225,6 +228,20 @@ function Config() {
             <option value="obligatorio">Obligatorio</option><option value="opcional">Opcional</option><option value="no">No pedir control</option>
           </Select>
         </Field>
+        {me?.schema_ok && <>
+          <Field label="Tolerancia para abrir el turno (minutos)" hint="Si se abre más tarde que el horario del turno + estos minutos, la app pide la hora de llegada y el motivo.">
+            <Input type="number" min={0} max={180} value={f.late_tolerance_min} onChange={(e) => setF({ ...f, late_tolerance_min: Number(e.target.value) })} />
+          </Field>
+          <Field label="Avisar si un turno no se abrió después de… (minutos)" hint="Llega una notificación al celular del dueño y del administrador.">
+            <Input type="number" min={5} max={240} value={f.unopened_alert_min} onChange={(e) => setF({ ...f, unopened_alert_min: Number(e.target.value) })} />
+          </Field>
+          <div className={cx("rounded-xl px-3 py-2.5 text-sm", cronOk ? "bg-good/10 text-good" : "bg-warn/10 text-warn")}>
+            {cronOk ? <>✓ Avisos automáticos funcionando (último control: {fmtDateTime(lastRun!.toISOString())})</>
+              : lastRun ? <>Los avisos automáticos no se ejecutan desde {fmtDateTime(lastRun.toISOString())}. Revisar la configuración en Supabase.</>
+              : <>Avisos automáticos sin configurar: falta ejecutar en Supabase el archivo <b>07_avisos_automaticos.sql</b>.</>}
+          </div>
+          <p className="text-xs text-muted">Los horarios de cada turno se cargan en <b>Catálogos → Turnos</b>.</p>
+        </>}
         <Field label="Recordar el respaldo cada… (días)"><Input type="number" min={1} max={30} value={f.backup_reminder_days} onChange={(e) => setF({ ...f, backup_reminder_days: Number(e.target.value) })} /></Field>
         <Button loading={loading} onClick={async () => {
           setLoading(true);

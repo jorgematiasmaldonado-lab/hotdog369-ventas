@@ -13,6 +13,7 @@ import { api, fetcher } from "@/lib/client/fetcher";
 import { cacheGet, cacheSet, CATALOG_KEY, SHIFT_KEY, submitSale, uuid, useOnline } from "@/lib/client/offline";
 import type { Catalog, PaymentMethod, Product, SaleRow } from "@/lib/client/types";
 import { ars, fmtTime } from "@/lib/format";
+import { minutesSinceStart, fmtMinutes, localClock } from "@/lib/dates";
 
 type CartLine = { product: Product; qty: number };
 type ShiftInfo = { blind?: boolean; shift: { id: number; opened_at: string; shift_type_name: string | null; opening_cash: number }; totals: { sales_count: number; sales_total?: number } } | null;
@@ -286,14 +287,26 @@ function OpenShift({ catalog, hours, opening, onOpened }: { catalog: Catalog; ho
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const pending = !editable && next == null;
+  const { me } = useMe();
+  // ¿Se está abriendo tarde? (horario del turno + tolerancia)
+  const [, tick] = useState(0);
+  useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 30000); return () => clearInterval(t); }, []);
+  const st = catalog.shiftTypes.find((t) => t.id === type);
+  const since = me?.schema_ok ? minutesSinceStart(st?.start_time, st?.days) : null;
+  const tol = Number(me?.settings.late_tolerance_min ?? 15);
+  const isLate = !!since && since.minutes > tol;
+  const [arrived, setArrived] = useState("");
+  const [reason, setReason] = useState("");
+  const nowHHMM = (() => { const m = localClock().minutes; return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; })();
   // El empleado confirma que contó la caja, o deja una observación si no coincide
-  const canOpen = editable || pending || ok || note.trim().length >= 3;
+  const canOpen = (editable || pending || ok || note.trim().length >= 3) && (!isLate || (!!arrived && reason.trim().length >= 3));
   const open = async () => {
     setLoading(true);
     try {
       await api("/api/shifts", { body: {
         shift_type_id: type || null, clock_in: !!hours?.enabled && !hours.clocked_in && clock,
         ...(editable ? { opening_cash: Number(cash || 0) } : { opening_confirmed: ok, opening_note: note.trim() || null }),
+        ...(isLate ? { arrived_time: arrived, late_reason: reason.trim() } : {}),
       } });
       toast("Turno abierto. ¡Buenas ventas!");
       onOpened();
@@ -319,6 +332,19 @@ function OpenShift({ catalog, hours, opening, onOpened }: { catalog: Catalog; ho
               ))}
             </div>
           </Field>
+          {isLate && (
+            <div className="space-y-3 rounded-xl border border-warn/40 bg-warn/10 p-3">
+              <div className="text-sm">
+                <div className="font-bold text-warn">Estás abriendo el turno {fmtMinutes(since!.minutes)} tarde</div>
+                <div className="text-text-2">El turno {st?.name} empieza a las {st?.start_time}. Contanos qué pasó: lo ve el administrador.</div>
+              </div>
+              <div className="grid grid-cols-[110px_1fr] gap-2">
+                <Field label="Llegué a las"><Input type="time" value={arrived} max={nowHHMM} onChange={(e) => setArrived(e.target.value)} /></Field>
+                <Field label="¿Por qué abriste tarde?"><Input value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} placeholder="ej: estaba limpiando" /></Field>
+              </div>
+              <p className="text-xs text-text-2">Tus horas se cuentan desde que fichás. Si llegaste antes, el administrador puede corregir tu fichada.</p>
+            </div>
+          )}
           {editable ? (
             <Field label="Efectivo inicial en caja" hint={next != null ? "Monto cargado para este turno. Podés corregirlo." : undefined}><MoneyInput value={cash} onChange={setCash} /></Field>
           ) : pending ? (

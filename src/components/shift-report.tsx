@@ -1,11 +1,12 @@
 "use client";
 import Image from "next/image";
-import { ars, fmtDateTime } from "@/lib/format";
+import { ars, fmtDateTime, fmtTime } from "@/lib/format";
+import { fmtMinutes } from "@/lib/dates";
 import { cx } from "./ui";
 
 export type ShiftSummary = {
   shift: { id: number; status: string; opened_at: string; closed_at: string | null; opening_cash: number; expected_cash: number | null; counted_cash: number | null; difference: number | null; notes: string | null; user_name: string; shift_type_name: string | null;
-    opening_pending?: boolean; opening_confirmed?: boolean | null; opening_note?: string | null;
+    opening_pending?: boolean; late_minutes?: number | null; arrived_at?: string | null; late_reason?: string | null; opening_confirmed?: boolean | null; opening_note?: string | null;
     declared?: Record<string, number> | null; expected?: Record<string, number> | null; declared_total?: number | null; expected_total?: number | null };
   totals: { sales_count: number; sales_total: number; voided_count: number; voided_total: number };
   byMethod: { id: number; name: string; kind: string; color: string; amount: number }[];
@@ -86,6 +87,11 @@ export function ShiftReport({ s }: { s: ShiftSummary }) {
           <Row label="Ventas confirmadas" value={`${s.totals.sales_count}`} />
           <Row label="Anuladas" value={`${s.totals.voided_count} · ${ars(s.totals.voided_total)}`} />
           <div className="my-2 border-t border-border" />
+          {!!sh.late_minutes && (
+            <div className="rounded-lg bg-bad/10 p-2 text-xs text-bad">
+              <b>Abrió el turno {fmtMinutes(sh.late_minutes)} tarde</b>{sh.arrived_at && ` · dice que llegó a las ${fmtTime(sh.arrived_at)}`}{sh.late_reason && ` · Motivo: ${sh.late_reason}`}
+            </div>
+          )}
           <Row label="Efectivo inicial" value={sh.opening_pending ? <span className="text-warn">Pendiente</span> : ars(sh.opening_cash)} />
           {sh.opening_confirmed === true && <div className="text-xs text-good">✓ El responsable confirmó la caja inicial</div>}
           {sh.opening_note && <div className="rounded-lg bg-warn/10 p-2 text-xs">Obs. al abrir: {sh.opening_note}</div>}
@@ -158,6 +164,7 @@ export function shiftWhatsappText(s: ShiftSummary) {
     `*HOT DOG 369 · Cierre de turno*`,
     `Turno ${sh.shift_type_name ?? ""} · ${sh.user_name}`,
     `${fmtDateTime(sh.opened_at)} → ${sh.closed_at ? fmtDateTime(sh.closed_at) : "abierto"}`,
+    sh.late_minutes ? `⚠ Abrió ${fmtMinutes(sh.late_minutes)} tarde${sh.late_reason ? ` (${sh.late_reason})` : ""}` : "",
     ``,
     ...s.byMethod.map((m) => `${m.name}: ${ars(m.amount)}`),
     `*TOTAL DEL TURNO: ${ars(s.totals.sales_total)}* (${s.totals.sales_count} ventas)`,
